@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { View, Text, Animated, PanResponder, StyleSheet } from 'react-native';
 import { N, T, BOMB } from './data';
+import { C, F } from './theme';
 
 export const PAD = 6;
 
@@ -10,12 +11,13 @@ const Tile = memo(function Tile({ tile, t, sp, cell, selected }) {
   const pala = sp === 'bomb' || t >= BOMB;
   const tx = useMemo(() => Animated.add(Animated.multiply(tile.cv, cell), PAD + g), [tile, cell]);
   const ty = useMemo(() => Animated.add(Animated.multiply(tile.rv, cell), PAD + g), [tile, cell]);
+  const rotate = useMemo(() => tile.rot.interpolate({ inputRange: [-180, 180], outputRange: ['-180deg', '180deg'] }), [tile]);
   return (
     <Animated.View
       pointerEvents="none"
       style={[
         styles.tile,
-        { width: size, height: size, borderRadius: size * 0.24, opacity: tile.op, transform: [{ translateX: tx }, { translateY: ty }, { scale: tile.sc }] },
+        { width: size, height: size, borderRadius: size * 0.24, opacity: tile.op, transform: [{ translateX: tx }, { translateY: ty }, { scale: tile.sc }, { rotate }] },
         selected && styles.sel,
         pala && styles.bomb,
       ]}
@@ -30,6 +32,7 @@ const Tile = memo(function Tile({ tile, t, sp, cell, selected }) {
 function Effect({ e, cell }) {
   const v = useRef(new Animated.Value(0)).current;
   useEffect(() => { Animated.timing(v, { toValue: 1, duration: e.kind === 'beam' ? 380 : 850, useNativeDriver: true }).start(); }, []);
+  if (e.kind === 'fly') return null; // disegnato da App, sopra tutto lo schermo
   if (e.kind === 'beam') {
     const pos = e.h
       ? { left: PAD, right: PAD, top: PAD + e.i * cell + cell * 0.3, height: cell * 0.4 }
@@ -50,7 +53,11 @@ function Effect({ e, cell }) {
   );
 }
 
-const BORDER = 4;
+const BORDER = 6, EDGE_TOP = 2, EDGE_BOTTOM = 5;
+
+// Per chi disegna sopra la scacchiera: dove inizia la griglia dentro al tagliere e quanto è grande una cella.
+export const INSET_X = BORDER + PAD, INSET_Y = BORDER + EDGE_TOP + PAD;
+export const cellFor = (width) => (width - 2 * BORDER - 2 * PAD) / N;
 
 export default function Board({ game, width }) {
   const inner = width - 2 * BORDER;
@@ -89,8 +96,8 @@ export default function Board({ game, width }) {
 
   const sel = game.sel && game.grid[game.sel.r] && game.grid[game.sel.r][game.sel.c];
   return (
-    <View style={[styles.frame, { width, height: width }]}>
-    <View style={{ width: inner, height: inner }} {...pan.panHandlers}>
+    <View style={[styles.frame, { width, height: width + EDGE_TOP + EDGE_BOTTOM }]}>
+    <View style={[styles.inner, { width: inner, height: inner }]} {...pan.panHandlers}>
       {[...game.tiles.values()].map((t) => (
         <Tile key={t.id} tile={t} t={t.t} sp={t.sp} cell={cell} selected={sel === t} />
       ))}
@@ -101,12 +108,15 @@ export default function Board({ game, width }) {
 }
 
 const styles = StyleSheet.create({
-  frame: { backgroundColor: '#2e1b10', borderRadius: 18, borderWidth: BORDER, borderColor: '#7a4f30', overflow: 'hidden', alignSelf: 'center' },
-  tile: { position: 'absolute', left: 0, top: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff4e0', borderBottomWidth: 3, borderBottomColor: '#e2cfae' },
-  sel: { backgroundColor: '#ffd27a', borderColor: '#fff', borderWidth: 2 },
-  bomb: { backgroundColor: '#f4b942', borderColor: '#d6402b', borderWidth: 3 },
+  // Tagliere di legno: bordo chiaro illuminato da sopra, interno scuro e infarinato.
+  frame: { backgroundColor: C.woodLight, borderRadius: 22, padding: BORDER, alignSelf: 'center', borderTopWidth: EDGE_TOP, borderTopColor: C.woodEdge, borderBottomWidth: EDGE_BOTTOM, borderBottomColor: '#4e2f1a', shadowColor: '#000', shadowOpacity: 0.45, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
+  inner: { backgroundColor: '#2a1810', borderRadius: 14, overflow: 'hidden' },
+  // Tessere: quadretti di pasta, con lo spigolo in alto più chiaro e quello in basso in ombra.
+  tile: { position: 'absolute', left: 0, top: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: C.cream, borderTopWidth: 2, borderTopColor: '#fffbf2', borderBottomWidth: 4, borderBottomColor: '#d9c29b' },
+  sel: { backgroundColor: C.saffron, borderColor: '#fff', borderWidth: 3, borderBottomWidth: 3, borderTopWidth: 3 },
+  bomb: { backgroundColor: C.saffron, borderColor: C.tomato, borderWidth: 3, borderTopColor: C.tomato, borderBottomColor: C.tomatoDark },
   emoji: { includeFontPadding: false, textAlign: 'center', userSelect: 'none' },
-  stripe: { position: 'absolute', backgroundColor: '#d6402b', borderRadius: 3, borderWidth: 2, borderColor: '#f4b942', borderStyle: 'dashed' },
+  stripe: { position: 'absolute', backgroundColor: C.tomato, borderRadius: 3, borderWidth: 2, borderColor: C.saffron, borderStyle: 'dashed' },
   beam: { position: 'absolute', backgroundColor: '#ffb347', borderRadius: 8, shadowColor: '#ff7a3d', shadowOpacity: 1, shadowRadius: 10 },
-  float: { position: 'absolute', userSelect: 'none', color: '#fff', fontWeight: '800', fontSize: 20, textAlign: 'center', textShadowColor: 'rgba(0,0,0,.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 2 },
+  float: { position: 'absolute', userSelect: 'none', color: C.saffron, fontFamily: F.display, fontSize: 22, textAlign: 'center', textShadowColor: 'rgba(0,0,0,.7)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 2 },
 });

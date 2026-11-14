@@ -43,6 +43,7 @@ export class Game {
   // ---------- livello ----------
   startLevel() {
     this.lvl = levelFor(this.lvlIdx);
+    this.clearHint();
     this.onCheckpoint({ lvlIdx: this.lvlIdx, score: this.score });
     this.moves = this.startMoves = this.lvl.moves;
     this.got = {};
@@ -70,23 +71,60 @@ export class Game {
     this.emit();
   }
 
-  begin() { this.modal = null; this.over = false; this.emit(); }
+  begin() { this.modal = null; this.over = false; this.emit(); this.armHint(); }
   next() { this.lvlIdx++; this.startLevel(); }
   retry() { this.startLevel(); }
 
   pick() { const ts = this.lvl.types; return ts[Math.floor(Math.random() * ts.length)]; }
 
+  // Posizioni degli ingredienti sulla pizza, in coordinate relative al raggio (0 = centro, 1 = bordo).
+  // spots[k][i] = [x, y, rotazione in gradi, forma]. L'i-esimo pezzo di k appare quando ne hai raccolti i+1.
   genSpots() {
     let seed = this.lvlIdx * 97 + 13;
     const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-    this.spots = {};
-    for (const k in this.lvl.need) {
-      if (k == 0) continue;
-      this.spots[k] = [];
-      for (let i = 0; i < this.lvl.need[k]; i++) {
-        const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * 0.72;
-        this.spots[k].push([Math.cos(a) * d, Math.sin(a) * d, rnd() * Math.PI * 2]);
+
+    // "Best candidate": tra alcuni punti a caso sceglie quello più lontano da quelli già messi,
+    // così gli ingredienti si distribuiscono in modo uniforme invece di ammucchiarsi.
+    // Conta anche la distanza dai pezzi dello stesso tipo (pesata di meno), così ogni ingrediente
+    // copre tutta la pizza invece di finire tutto da una parte. Il bordo conta come un vicino,
+    // per non schiacciarli contro il cornicione.
+    const spread = (types, maxR) => {
+      const pts = [];
+      for (const k of types) {
+        let best = null, bestScore = -1;
+        for (let j = 0; j < 24; j++) {
+          const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * maxR;
+          const x = Math.cos(a) * d, y = Math.sin(a) * d;
+          let score = (maxR - d) + 0.07;
+          for (const p of pts) {
+            const dist = Math.hypot(p[0] - x, p[1] - y);
+            score = Math.min(score, p[2] === k ? dist * 0.6 : dist);
+          }
+          if (score > bestScore) { bestScore = score; best = [x, y, k]; }
+        }
+        pts.push(best);
       }
+      return pts;
+    };
+
+    this.spots = {};
+    const need = this.lvl.need;
+
+    // Ingredienti (non pomodoro né mozzarella), con i tipi alternati nell'ordine in cui compaiono.
+    const slots = [];
+    for (const k in need) {
+      if (k == 0 || k == 1) continue;
+      this.spots[k] = [];
+      for (let i = 0; i < need[k]; i++) slots.push({ k, i, p: (i + 0.5) / need[k] });
+    }
+    slots.sort((a, b) => a.p - b.p);
+    spread(slots.map((sl) => sl.k), 0.74).forEach(([x, y], j) => {
+      this.spots[slots[j].k][slots[j].i] = [x, y, (rnd() - 0.5) * 50, 0];
+    });
+
+    // Mozzarella: posizioni a parte, sotto gli altri ingredienti.
+    if (need[1]) {
+      this.spots[1] = spread(Array(need[1]).fill(1), 0.7).map(([x, y]) => [x, y, rnd() * 360, Math.floor(rnd() * 1e6)]);
     }
   }
 
@@ -95,7 +133,7 @@ export class Game {
     const tile = {
       id: ++this.uid, t, sp: null, r, c,
       rv: new Animated.Value(fromRow), cv: new Animated.Value(c),
-      sc: new Animated.Value(1), op: new Animated.Value(1),
+      sc: new Animated.Value(1), op: new Animated.Value(1), rot: new Animated.Value(0),
     };
     this.tiles.set(tile.id, tile);
     return tile;
@@ -115,6 +153,61 @@ export class Game {
       Animated.timing(tile.sc, { toValue: 0.1, duration: 170, useNativeDriver: true }),
       Animated.timing(tile.op, { toValue: 0, duration: 170, useNativeDriver: true }),
     ]).start();
+  }
+
+  // Scossone a destra e sinistra: mossa non valida.
+  shake(tile) {
+    const t = (v, d = 45) => Animated.timing(tile.rot, { toValue: v, duration: d, useNativeDriver: true });
+    Animated.sequence([t(-10), t(10), t(-7), t(7), t(0)]).start();
+  }
+
+  // Rimbalzo: è nata una tessera speciale.
+  bounce(tile) {
+    Animated.sequence([
+      Animated.timing(tile.sc, { toValue: 1.3, duration: 120, useNativeDriver: true }),
+      Animated.spring(tile.sc, { toValue: 1, speed: 20, bounciness: 14, useNativeDriver: true }),
+    ]).start();
+  }
+
+  // ---------- suggerimento ----------
+  // Se il giocatore sta fermo qualche secondo, due tessere scambiabili ondeggiano.
+  armHint() {
+    this.clearHint();
+    this.hintTimer = setTimeout(() => this.showHint(), 5000);
+  }
+
+  clearHint() {
+    clearTimeout(this.hintTimer);
+    this.hintTimer = null;
+    if (this.hintAnim) { this.hintAnim.stop(); this.hintAnim = null; }
+    if (this.hintTiles) {
+      for (const t of this.hintTiles) { t.rot.setValue(0); t.sc.setValue(1); }
+      this.hintTiles = null;
+    }
+  }
+
+  showHint() {
+    if (this.busy || this.over || this.modal) return;
+    const m = this.findMove();
+    if (!m) return;
+    const tiles = m.map(([r, c]) => this.grid[r][c]).filter(Boolean);
+    this.hintTiles = tiles;
+    const wobble = (t) => Animated.sequence([
+      Animated.parallel([
+        Animated.timing(t.rot, { toValue: -8, duration: 90, useNativeDriver: true }),
+        Animated.timing(t.sc, { toValue: 1.1, duration: 90, useNativeDriver: true }),
+      ]),
+      Animated.timing(t.rot, { toValue: 8, duration: 140, useNativeDriver: true }),
+      Animated.timing(t.rot, { toValue: -6, duration: 120, useNativeDriver: true }),
+      Animated.timing(t.rot, { toValue: 0, duration: 90, useNativeDriver: true }),
+      Animated.timing(t.sc, { toValue: 1, duration: 100, useNativeDriver: true }),
+    ]);
+    this.hintAnim = Animated.parallel(tiles.map(wobble));
+    this.hintAnim.start(({ finished }) => {
+      if (!finished) return;
+      this.hintAnim = null;
+      this.hintTimer = setTimeout(() => this.showHint(), 3000);
+    });
   }
 
   // ---------- regole ----------
@@ -145,19 +238,25 @@ export class Game {
 
   swapG(r1, c1, r2, c2) { const a = this.grid[r1][c1]; this.grid[r1][c1] = this.grid[r2][c2]; this.grid[r2][c2] = a; }
 
-  hasMoves() {
+  hasMoves() { return !!this.findMove(); }
+
+  // Una coppia di celle adiacenti che si possono scambiare, o null.
+  findMove() {
     for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
-      if (this.grid[r][c].sp === 'bomb') return true;
+      if (this.grid[r][c].sp === 'bomb') {
+        if (c + 1 < N) return [[r, c], [r, c + 1]];
+        return [[r, c], [r, c - 1]];
+      }
       for (const [dr, dc] of [[0, 1], [1, 0]]) {
         const r2 = r + dr, c2 = c + dc;
         if (r2 >= N || c2 >= N) continue;
         this.swapG(r, c, r2, c2);
         const ok = this.findMatches().length > 0;
         this.swapG(r, c, r2, c2);
-        if (ok) return true;
+        if (ok) return [[r, c], [r2, c2]];
       }
     }
-    return false;
+    return null;
   }
 
   commonType() {
@@ -180,6 +279,7 @@ export class Game {
   // ---------- input ----------
   tap(p) {
     if (this.busy || this.over) return;
+    this.armHint();
     const s = this.sel;
     if (s && Math.abs(s.r - p.r) + Math.abs(s.c - p.c) === 1) { this.sel = null; this.trySwap(s.r, s.c, p.r, p.c); return; }
     this.sel = s && s.r === p.r && s.c === p.c ? null : p;
@@ -196,6 +296,7 @@ export class Game {
   async trySwap(r1, c1, r2, c2) {
     if (this.busy || this.over) return;
     this.busy = true;
+    this.clearHint();
     const a = this.grid[r1][c1], b = this.grid[r2][c2];
     this.swapG(r1, c1, r2, c2); this.move(a, r2, c2); this.move(b, r1, c1);
     sfx('swap');
@@ -216,8 +317,11 @@ export class Game {
       if (!this.findMatches().length) {
         this.swapG(r1, c1, r2, c2); this.move(a, r1, c1); this.move(b, r2, c2);
         haptic('error'); sfx('bad');
-        await wait(220);
+        await wait(200);
+        this.shake(a); this.shake(b);
+        await wait(240);
         this.busy = false; this.emit();
+        this.armHint();
         return;
       }
       this.moves--;
@@ -226,6 +330,7 @@ export class Game {
     if (!this.done() && this.moves > 0 && !this.hasMoves()) await this.shuffle();
     this.busy = false;
     this.checkEnd();
+    if (!this.over) this.armHint();
   }
 
   async resolve(swapped) {
@@ -272,16 +377,21 @@ export class Game {
       if (!t) continue;
       t.sp = sp;
       if (sp === 'bomb') t.t = BOMB;
+      this.bounce(t);
     }
     if (create.size) { haptic('heavy'); sfx('special'); }
     else if (fired) sfx('fire');
     // rimozione
     let n = 0, pine = 0, sr = 0, scc = 0;
-    const popped = [];
+    const popped = [], flown = {};
     for (const k of clear) {
       if (create.has(k)) continue;
       const r = Math.floor(k / N), c = k % N, t = this.grid[r][c];
       if (!t) continue;
+      if (this.lvl.need[t.t] && (this.got[t.t] || 0) < this.lvl.need[t.t] && (flown[t.t] || 0) < 2) {
+        flown[t.t] = (flown[t.t] || 0) + 1;
+        this.fx({ kind: 'fly', t: t.t, r, c });
+      }
       this.collect(t.t);
       if (t.t === 6) pine++;
       n++; sr += r; scc += c;

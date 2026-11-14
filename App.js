@@ -1,10 +1,15 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
-import { View, Text, Pressable, Share, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, Share, StyleSheet, Animated, Easing, useWindowDimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { useFonts } from 'expo-font';
+import { LilitaOne_400Regular } from '@expo-google-fonts/lilita-one';
+import { Nunito_600SemiBold, Nunito_600SemiBold_Italic, Nunito_800ExtraBold } from '@expo-google-fonts/nunito';
+import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
 import { Game } from './src/engine';
 import { T } from './src/data';
-import Board from './src/Board';
+import { C, F } from './src/theme';
+import Board, { INSET_X, INSET_Y, cellFor } from './src/Board';
 import Pizza from './src/Pizza';
 import { loadProgress, saveProgress } from './src/save';
 import { initSound, setMuted } from './src/sound';
@@ -18,6 +23,128 @@ export default function App() {
   );
 }
 
+// Luce calda del forno dietro la scacchiera.
+function OvenGlow({ width, height }) {
+  return (
+    <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Defs>
+        <RadialGradient id="glow" cx="50%" cy="42%" rx="60%" ry="45%">
+          <Stop offset="0" stopColor={C.ovenGlow} stopOpacity="1" />
+          <Stop offset="1" stopColor={C.oven} stopOpacity="0" />
+        </RadialGradient>
+      </Defs>
+      <Rect x="0" y="0" width={width} height={height} fill="url(#glow)" />
+    </Svg>
+  );
+}
+
+// Misura un elemento rispetto alla finestra; serve per far volare gli ingredienti fino alla pizza.
+function useBox() {
+  const ref = useRef(null);
+  const [box, setBox] = useState(null);
+  const onLayout = () => {
+    const node = ref.current;
+    if (node && node.measureInWindow) node.measureInWindow((x, y, w, h) => setBox({ x, y, w, h }));
+  };
+  return [ref, box, onLayout];
+}
+
+// Un ingrediente che vola dalla scacchiera alla pizza, con un piccolo arco.
+function Fly({ e, from, to, onLand }) {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(v, { toValue: 1, duration: 620, delay: 140, easing: Easing.in(Easing.quad), useNativeDriver: true })
+      .start(({ finished }) => finished && onLand());
+  }, []);
+  const lift = 70, arc = [0, 0.71, 1, 0.71, 0];
+  const translateX = v.interpolate({ inputRange: [0, 1], outputRange: [from.x, to.x] });
+  const translateY = v.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: arc.map((a, i) => from.y + (to.y - from.y) * (i / 4) - lift * a) });
+  const scale = v.interpolate({ inputRange: [0, 0.2, 1], outputRange: [1, 1.35, 0.45] });
+  return (
+    <Animated.Text style={[styles.fly, { transform: [{ translateX }, { translateY }, { scale }] }]}>{T[e.t].e}</Animated.Text>
+  );
+}
+
+function FlyLayer({ effects, layer, board, pizza, onLand }) {
+  const flies = effects.filter((e) => e.kind === 'fly');
+  if (!flies.length || !layer || !board || !pizza) return null;
+  const half = styles.fly.width / 2;
+  const to = { x: pizza.x - layer.x + pizza.w / 2 - half, y: pizza.y - layer.y + pizza.h / 2 - half };
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {flies.map((e) => (
+        <Fly
+          key={e.id} e={e} to={to} onLand={onLand}
+          from={{ x: board.x - layer.x + INSET_X + (e.c + 0.5) * board.cell - half, y: board.y - layer.y + INSET_Y + (e.r + 0.5) * board.cell - half }}
+        />
+      ))}
+    </View>
+  );
+}
+
+// Piccolo balzo ogni volta che `value` cambia; `big` lo rende più vistoso.
+function useBump(value, big, enabled = true) {
+  const sc = useRef(new Animated.Value(1)).current;
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    if (!enabled) return;
+    sc.setValue(big ? 1.35 : 1.18);
+    Animated.spring(sc, { toValue: 1, speed: 18, bounciness: 12, useNativeDriver: true }).start();
+  }, [value]);
+  return sc;
+}
+
+// Contamosse: salta a ogni mossa, pulsa quando ne restano poche.
+function Moves({ moves, low }) {
+  const bump = useBump(moves);
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (!low) { pulse.setValue(1); return; }
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1.08, duration: 420, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1, duration: 420, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [low]);
+  return (
+    <Animated.View style={[styles.moves, low && styles.movesLow, { transform: [{ scale: Animated.multiply(bump, pulse) }] }]}>
+      <Text style={styles.movesN}>{moves}</Text>
+      <Text style={styles.movesL}>mosse</Text>
+    </Animated.View>
+  );
+}
+
+function Goal({ emoji, left }) {
+  const sc = useBump(left, left === 0);
+  return (
+    <Animated.View style={[styles.goal, !left && styles.goalDone, { transform: [{ scale: sc }] }]}>
+      <Text style={styles.goalE}>{emoji}</Text>
+      <Text style={styles.goalN}>{left || '✓'}</Text>
+    </Animated.View>
+  );
+}
+
+// Il cliente fa un saltello quando parla.
+function Face({ face, talking }) {
+  const sc = useBump(talking, true, !!talking);
+  return (
+    <Animated.View style={[styles.faceWrap, { transform: [{ scale: sc }] }]}>
+      <Text style={styles.face}>{face}</Text>
+    </Animated.View>
+  );
+}
+
+// Compare con un balzo, dopo `delay` ms. Per stelle, pizza e finestre.
+function Pop({ delay = 0, style, children }) {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(v, { toValue: 1, delay, speed: 14, bounciness: 12, useNativeDriver: true }).start();
+  }, []);
+  return <Animated.View style={[style, { opacity: v, transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }] }]}>{children}</Animated.View>;
+}
+
 function GameScreen() {
   const [, rerender] = useReducer((x) => x + 1, 0);
   const gameRef = useRef(null);
@@ -25,6 +152,15 @@ function GameScreen() {
   const game = gameRef.current;
   const [ready, setReady] = useState(false);
   const [muted, setMutedState] = useState(false);
+  const [fontsLoaded, fontError] = useFonts({ LilitaOne_400Regular, Nunito_600SemiBold, Nunito_600SemiBold_Italic, Nunito_800ExtraBold });
+  const [layerRef, layerBox, onLayerLayout] = useBox();
+  const [boardRef, boardBox, onBoardLayout] = useBox();
+  const [pizzaRef, pizzaBox, onPizzaLayout] = useBox();
+  const pizzaScale = useRef(new Animated.Value(1)).current;
+  const onLand = () => {
+    pizzaScale.setValue(1.14);
+    Animated.spring(pizzaScale, { toValue: 1, speed: 20, bounciness: 10, useNativeDriver: true }).start();
+  };
 
   // All'avvio riprende dall'ultimo ordine salvato.
   useEffect(() => {
@@ -38,61 +174,68 @@ function GameScreen() {
     return () => { alive = false; };
   }, [game]);
   const { width, height } = useWindowDimensions();
-  const boardW = Math.max(240, Math.min(width - 24, 440, height - 330));
+  const boardW = Math.max(240, Math.min(width - 24, 440, height - 340));
   const lvl = game.lvl;
   const talk = game.talk;
 
-  if (!ready) return <View style={styles.root} />;
+  // Se i font non arrivano (es. senza rete sul web) si parte lo stesso con quelli di sistema.
+  if (!ready || (!fontsLoaded && !fontError)) return <View style={styles.root} />;
 
   return (
     <SafeAreaView style={styles.root}>
-      <View style={[styles.app, { width: Math.min(width, 464) }]}>
+      <OvenGlow width={width} height={height} />
+      <View ref={layerRef} onLayout={onLayerLayout} style={[styles.app, { width: Math.min(width, 464) }]}>
         <View style={styles.header}>
-          <Text style={styles.h1}>🍕 Pizzaiolo <Text style={{ color: '#f4b942' }}>Crush</Text></Text>
-          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+          <Text style={styles.h1}>Pizzaiolo Crush</Text>
+          <View style={styles.headerRight}>
             <Pressable
               onPress={() => { setMuted(!muted); setMutedState(!muted); }}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel={muted ? 'Attiva i suoni' : 'Disattiva i suoni'}
+              style={styles.iconBtn}
             >
-              <Text style={styles.pill}>{muted ? '🔇' : '🔊'}</Text>
+              <Text style={styles.iconBtnT}>{muted ? '🔇' : '🔊'}</Text>
             </Pressable>
-            <Text style={styles.pill}>Ordine {game.lvlIdx + 1}</Text>
-            <Text style={styles.pill}>{game.score} pt</Text>
+            <View style={styles.score}>
+              <Text style={styles.scoreN}>{game.score}</Text>
+              <Text style={styles.scoreL}>punti</Text>
+            </View>
           </View>
         </View>
 
         <View style={styles.order}>
-          <Text style={styles.face}>{(talk && talk.face) || lvl.face}</Text>
+          <Face face={(talk && talk.face) || lvl.face} talking={talk ? talk.text : ''} />
           <View style={{ flex: 1 }}>
+            <Text style={styles.orderNo}>Ordine {game.lvlIdx + 1}</Text>
             <Text style={styles.orderTitle} numberOfLines={1}>{lvl.pizza} per {lvl.who}</Text>
             <Text style={[styles.orderSay, talk && talk.hot && styles.hot]} numberOfLines={2}>{talk ? talk.text : lvl.hi}</Text>
           </View>
-          <View style={styles.moves}>
-            <Text style={styles.movesN}>{game.moves}</Text>
-            <Text style={styles.movesL}>MOSSE</Text>
-          </View>
+          <Moves moves={game.moves} low={game.moves <= 3 && !game.over} />
         </View>
 
-        <Board game={game} width={boardW} />
+        <View ref={boardRef} onLayout={onBoardLayout} style={{ alignSelf: 'center' }}>
+          <Board game={game} width={boardW} />
+        </View>
 
         <View style={styles.bottom}>
-          <Pizza size={110} lvl={lvl} got={game.got} spots={game.spots} />
+          <Animated.View ref={pizzaRef} onLayout={onPizzaLayout} style={{ transform: [{ scale: pizzaScale }] }}>
+            <Pizza size={104} lvl={lvl} got={game.got} spots={game.spots} />
+          </Animated.View>
           <View style={{ flex: 1, gap: 8 }}>
             <View style={styles.goals}>
-              {Object.keys(lvl.need).map((k) => {
-                const left = Math.max(0, lvl.need[k] - (game.got[k] || 0));
-                return (
-                  <Text key={k} style={[styles.goal, !left && styles.goalDone]}>
-                    {T[k].e} {left || '✓'}
-                  </Text>
-                );
-              })}
+              {Object.keys(lvl.need).map((k) => (
+                <Goal key={k} emoji={T[k].e} left={Math.max(0, lvl.need[k] - (game.got[k] || 0))} />
+              ))}
             </View>
-            <Text style={styles.tip}>Trascina un ingrediente su uno vicino, o toccane due di fila.</Text>
+            <Text style={styles.tip}>Trascina un ingrediente su uno vicino, oppure toccane due.</Text>
           </View>
         </View>
+
+        <FlyLayer
+          effects={game.effects} layer={layerBox} pizza={pizzaBox} onLand={onLand}
+          board={boardBox && { ...boardBox, cell: cellFor(boardW) }}
+        />
       </View>
 
       {game.modal && <GameModal key={game.modal.type + game.lvlIdx} game={game} />}
@@ -110,16 +253,18 @@ function GameModal({ game }) {
       <>
         <Text style={styles.big}>{lvl.face}</Text>
         <Text style={styles.h2}>{lvl.who} ordina una {lvl.pizza}</Text>
-        <Text style={styles.p}>“{lvl.hi}”</Text>
+        <Text style={styles.quote}>“{lvl.hi}”</Text>
         <View style={styles.list}>
-          {Object.keys(lvl.need).map((k) => <Text key={k} style={styles.chip}>{T[k].e} {lvl.need[k]}</Text>)}
+          {Object.keys(lvl.need).map((k) => (
+            <View key={k} style={styles.chip}><Text style={styles.chipE}>{T[k].e}</Text><Text style={styles.chipN}>{lvl.need[k]}</Text></View>
+          ))}
         </View>
-        <Text style={styles.p}>Hai <Text style={{ fontWeight: '800' }}>{lvl.moves} mosse</Text>.</Text>
+        <Text style={styles.p}>Hai <Text style={styles.strong}>{lvl.moves} mosse</Text>.</Text>
         {game.lvlIdx === 0 && (
           <View style={styles.help}>
             <Text style={styles.helpT}>👉 Allinea 3 ingredienti uguali per metterli sulla pizza.</Text>
-            <Text style={styles.helpT}>🔥 <Text style={{ fontWeight: '800' }}>4 in fila</Text> → Forno: brucia una riga o colonna.</Text>
-            <Text style={styles.helpT}>🍕 <Text style={{ fontWeight: '800' }}>5 in fila o a L/T</Text> → Pala: scambiala con un ingrediente per prenderli tutti.</Text>
+            <Text style={styles.helpT}>🔥 <Text style={styles.strong}>4 in fila</Text> accende il Forno: brucia una riga o colonna.</Text>
+            <Text style={styles.helpT}>🍕 <Text style={styles.strong}>5 in fila o a L/T</Text> crea la Pala: scambiala con un ingrediente per prenderli tutti.</Text>
           </View>
         )}
         <View style={styles.btns}><Btn label="Inforna!" onPress={() => game.begin()} /></View>
@@ -134,12 +279,16 @@ function GameModal({ game }) {
     body = (
       <>
         <Text style={styles.h2}>{lvl.pizza} servita! {lvl.face}</Text>
-        <View style={{ alignSelf: 'center', marginVertical: 6 }}>
+        <Pop delay={150} style={{ alignSelf: 'center', marginVertical: 6 }}>
           <Pizza size={190} lvl={lvl} got={game.got} spots={game.spots} seed={game.lvlIdx} final />
+        </Pop>
+        <View style={styles.starsRow}>
+          {[0, 1, 2].map((i) => (
+            <Pop key={i} delay={500 + i * 220}><Text style={styles.stars}>{i < modal.stars ? '⭐' : '☆'}</Text></Pop>
+          ))}
         </View>
-        <Text style={styles.stars}>{'⭐'.repeat(modal.stars)}{'☆'.repeat(3 - modal.stars)}</Text>
-        <Text style={styles.p}>“{lvl.win}”</Text>
-        <Text style={[styles.p, { opacity: 0.7 }]}>Mosse avanzate: {game.moves} (+{modal.bonus} pt) · Totale {game.score} pt</Text>
+        <Text style={styles.quote}>“{lvl.win}”</Text>
+        <Text style={styles.small}>Mosse avanzate: {game.moves} (+{modal.bonus} punti). Totale {game.score} punti.</Text>
         <View style={styles.btns}>
           <Btn alt label={shared ? 'Condiviso ✓' : 'Condividi'} onPress={async () => {
             try { await Share.share({ message: game.shareText() }); setShared(true); } catch (e) {}
@@ -153,10 +302,10 @@ function GameModal({ game }) {
       <>
         <Text style={styles.big}>😤</Text>
         <Text style={styles.h2}>{lvl.who} se n'è andato</Text>
-        <Text style={styles.p}>“{lvl.lose}”</Text>
+        <Text style={styles.quote}>“{lvl.lose}”</Text>
         <View style={styles.list}>
           {Object.keys(lvl.need).filter((k) => (game.got[k] || 0) < lvl.need[k]).map((k) => (
-            <Text key={k} style={styles.chip}>{T[k].e} mancano {lvl.need[k] - (game.got[k] || 0)}</Text>
+            <View key={k} style={styles.chip}><Text style={styles.chipE}>{T[k].e}</Text><Text style={styles.chipN}>mancano {lvl.need[k] - (game.got[k] || 0)}</Text></View>
           ))}
         </View>
         <View style={styles.btns}><Btn label="Riprova" onPress={() => game.retry()} /></View>
@@ -164,55 +313,81 @@ function GameModal({ game }) {
     );
   }
 
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => { Animated.spring(v, { toValue: 1, speed: 16, bounciness: 7, useNativeDriver: true }).start(); }, []);
   return (
-    <View style={styles.overlay}>
-      <View style={styles.card}>{body}</View>
-    </View>
+    <Animated.View style={[styles.overlay, { opacity: v }]}>
+      <Animated.View style={[styles.card, { transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] }) }, { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [28, 0] }) }] }]}>
+        {body}
+      </Animated.View>
+    </Animated.View>
   );
 }
 
 function Btn({ label, onPress, alt }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.btn, alt && styles.btnAlt, pressed && { transform: [{ translateY: 3 }] }]}>
-      <Text style={[styles.btnT, alt && { color: '#3b2417' }]}>{label}</Text>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.btn, alt && styles.btnAlt, pressed && styles.btnPressed]}>
+      <Text style={[styles.btnT, alt && { color: C.wood }]}>{label}</Text>
     </Pressable>
   );
 }
 
-const cream = '#fff4e0', wood = '#3b2417';
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#2a190f', alignItems: 'center' },
-  app: { flex: 1, paddingHorizontal: 12, paddingTop: 8, gap: 10 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  h1: { color: cream, fontSize: 21, fontWeight: '800' },
-  pill: { color: cream, backgroundColor: 'rgba(0,0,0,.35)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, fontWeight: '700', fontSize: 13, overflow: 'hidden' },
-  order: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: cream, borderRadius: 16, padding: 10, borderBottomWidth: 4, borderBottomColor: '#c9a77c', minHeight: 70 },
-  face: { fontSize: 36 },
-  orderTitle: { color: wood, fontWeight: '800', fontSize: 15 },
-  orderSay: { color: wood, opacity: 0.8, fontSize: 13 },
-  hot: { color: '#d6402b', opacity: 1, fontWeight: '700' },
-  moves: { backgroundColor: '#d6402b', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, alignItems: 'center', minWidth: 58 },
-  movesN: { color: '#fff', fontSize: 24, fontWeight: '800' },
-  movesL: { color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 0.6 },
+  root: { flex: 1, backgroundColor: C.oven, alignItems: 'center' },
+  app: { flex: 1, paddingHorizontal: 12, paddingTop: 6, gap: 10 },
+
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 2 },
+  h1: { color: C.cream, fontFamily: F.display, fontSize: 26, letterSpacing: 0.3, textShadowColor: 'rgba(0,0,0,.45)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 0 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  iconBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(0,0,0,.3)', alignItems: 'center', justifyContent: 'center' },
+  iconBtnT: { fontSize: 16 },
+  score: { flexDirection: 'row', alignItems: 'baseline', gap: 4, backgroundColor: 'rgba(0,0,0,.3)', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
+  scoreN: { color: C.saffron, fontFamily: F.display, fontSize: 18 },
+  scoreL: { color: C.cream, fontFamily: F.body, fontSize: 12, opacity: 0.8 },
+
+  // La comanda: un foglietto di carta con il cliente, la richiesta e il contamosse.
+  order: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.cream, borderRadius: 16, paddingVertical: 8, paddingHorizontal: 10, borderBottomWidth: 4, borderBottomColor: C.creamDark, minHeight: 74 },
+  faceWrap: { width: 48, height: 48, borderRadius: 24, backgroundColor: C.creamDark, alignItems: 'center', justifyContent: 'center' },
+  face: { fontSize: 30, includeFontPadding: false },
+  orderNo: { color: C.tomato, fontFamily: F.bodyBold, fontSize: 11, letterSpacing: 0.2 },
+  orderTitle: { color: C.wood, fontFamily: F.display, fontSize: 17, marginTop: -1 },
+  orderSay: { color: C.wood, fontFamily: F.bodyItalic, fontSize: 13, opacity: 0.8, lineHeight: 17 },
+  hot: { color: C.tomato, opacity: 1, fontFamily: F.bodyBold },
+  moves: { backgroundColor: C.tomato, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5, alignItems: 'center', minWidth: 60, borderBottomWidth: 3, borderBottomColor: C.tomatoDark },
+  movesLow: { backgroundColor: C.saffron, borderBottomColor: C.saffronDark },
+  movesN: { color: '#fff', fontFamily: F.display, fontSize: 26, lineHeight: 28, includeFontPadding: false },
+  movesL: { color: '#fff', fontFamily: F.bodyBold, fontSize: 10, marginTop: -2 },
+
   bottom: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   goals: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  goal: { color: cream, backgroundColor: 'rgba(0,0,0,.35)', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, fontWeight: '700', fontSize: 16, overflow: 'hidden' },
-  goalDone: { backgroundColor: '#2f8f4e' },
-  tip: { color: cream, opacity: 0.65, fontSize: 12 },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(20,10,5,.75)', alignItems: 'center', justifyContent: 'center', padding: 18 },
-  card: { backgroundColor: cream, borderRadius: 22, padding: 20, width: '100%', maxWidth: 360, borderBottomWidth: 6, borderBottomColor: '#c9a77c' },
-  big: { fontSize: 54, textAlign: 'center' },
-  h2: { color: wood, fontSize: 22, fontWeight: '800', textAlign: 'center', marginVertical: 4 },
-  p: { color: wood, fontSize: 15, textAlign: 'center', marginVertical: 4 },
+  goal: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,.35)', borderRadius: 12, paddingHorizontal: 9, paddingVertical: 4 },
+  goalDone: { backgroundColor: C.basil },
+  goalE: { fontSize: 16, includeFontPadding: false },
+  goalN: { color: C.cream, fontFamily: F.display, fontSize: 16, includeFontPadding: false },
+  tip: { color: C.cream, fontFamily: F.body, opacity: 0.6, fontSize: 12, lineHeight: 16 },
+
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(20,10,5,.8)', alignItems: 'center', justifyContent: 'center', padding: 18 },
+  card: { backgroundColor: C.cream, borderRadius: 24, padding: 22, width: '100%', maxWidth: 360, borderBottomWidth: 6, borderBottomColor: C.creamDark },
+  big: { fontSize: 54, textAlign: 'center', includeFontPadding: false },
+  h2: { color: C.wood, fontFamily: F.display, fontSize: 24, textAlign: 'center', marginVertical: 4, lineHeight: 28 },
+  p: { color: C.wood, fontFamily: F.body, fontSize: 15, textAlign: 'center', marginVertical: 4 },
+  quote: { color: C.wood, fontFamily: F.bodyItalic, fontSize: 15, textAlign: 'center', marginVertical: 4, opacity: 0.85 },
+  small: { color: C.wood, fontFamily: F.body, fontSize: 13, textAlign: 'center', opacity: 0.7, marginTop: 2 },
+  strong: { fontFamily: F.bodyBold },
   list: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginVertical: 8 },
-  chip: { color: wood, backgroundColor: '#f1dfc0', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4, fontWeight: '700', overflow: 'hidden' },
-  help: { backgroundColor: '#f6e7cc', borderRadius: 12, padding: 10, marginTop: 8, gap: 4 },
-  helpT: { color: wood, fontSize: 13.5 },
-  stars: { fontSize: 30, textAlign: 'center', letterSpacing: 4 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.creamDark, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 },
+  chipE: { fontSize: 16, includeFontPadding: false },
+  chipN: { color: C.wood, fontFamily: F.display, fontSize: 15, includeFontPadding: false },
+  help: { backgroundColor: '#f6e7cc', borderRadius: 14, padding: 12, marginTop: 8, gap: 6 },
+  helpT: { color: C.wood, fontFamily: F.body, fontSize: 13.5, lineHeight: 18 },
+  starsRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginVertical: 2 },
+  stars: { fontSize: 30, textAlign: 'center', includeFontPadding: false },
+  fly: { position: 'absolute', left: 0, top: 0, width: 30, height: 30, lineHeight: 30, fontSize: 24, textAlign: 'center', includeFontPadding: false },
   btns: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 14, flexWrap: 'wrap' },
-  btn: { backgroundColor: '#d6402b', borderRadius: 14, paddingHorizontal: 18, paddingVertical: 11, borderBottomWidth: 4, borderBottomColor: '#8f2416' },
-  btnAlt: { backgroundColor: '#e9d3ae', borderBottomColor: '#b9996b' },
-  btnT: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  btn: { backgroundColor: C.tomato, borderRadius: 16, paddingHorizontal: 20, paddingVertical: 11, borderBottomWidth: 4, borderBottomColor: C.tomatoDark },
+  btnAlt: { backgroundColor: C.saffron, borderBottomColor: C.saffronDark },
+  btnPressed: { transform: [{ translateY: 3 }], borderBottomWidth: 1 },
+  btnT: { color: '#fff', fontFamily: F.display, fontSize: 18, letterSpacing: 0.3 },
   reset: { alignSelf: 'center', marginTop: 12, padding: 4 },
-  resetT: { color: wood, opacity: 0.6, fontSize: 13, textDecorationLine: 'underline' },
+  resetT: { color: C.wood, fontFamily: F.body, opacity: 0.6, fontSize: 13, textDecorationLine: 'underline' },
 });

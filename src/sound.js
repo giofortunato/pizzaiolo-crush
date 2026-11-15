@@ -26,14 +26,14 @@ let ready = false;
 export async function initSound() {
   try {
     muted = (await AsyncStorage.getItem(MUTE_KEY)) === '1';
-  } catch (e) {}
+  } catch {}
   try {
     await setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' });
-  } catch (e) {}
+  } catch {}
   try {
     for (const k in SOURCES) players[k] = createAudioPlayer(SOURCES[k]);
     ready = true;
-  } catch (e) {}
+  } catch {}
   return muted;
 }
 
@@ -44,7 +44,7 @@ export function sfx(name) {
   try {
     p.seekTo(0).catch(() => {});
     p.play();
-  } catch (e) {}
+  } catch {}
 }
 
 export function isMuted() { return muted; }

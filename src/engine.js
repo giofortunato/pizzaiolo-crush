@@ -1,6 +1,11 @@
 import { Animated } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { N, BOMB, T, NONNO, PRAISE, levelFor } from './data';
+import { N, DOUGH, T, NONNO, PRAISE, levelFor } from './data';
+import {
+  keyOf, canMove, findMatches, findMove, swapCells, planSpecials, clearStep, collapse,
+  newBoard, reshuffle, ofType, starsFor, plainCell,
+} from './rules';
+import { emptyProgress, recordWin } from './progress';
 import { sfx } from './sound';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -10,69 +15,110 @@ const haptic = (kind = 'light') => {
     if (kind === 'success') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     else if (kind === 'error') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     else Haptics.impactAsync(kind === 'heavy' ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Light);
-  } catch (e) {}
+  } catch {}
 };
 
 /**
- * Tutta la logica del gioco vive qui, fuori da React.
- * Lo schermo si iscrive con onChange() e ridisegna quando serve.
+ * Il gioco, fuori da React: stato, animazioni, suoni.
+ * Le regole pure (file, mosse, speciali, ostacoli) stanno in rules.js.
+ * Lo schermo si iscrive con onChange() e ridisegna quando serve; onSave() scrive su disco.
  */
 export class Game {
-  constructor(onChange, onCheckpoint) {
-    this.onChange = () => {};
-    this.onCheckpoint = () => {};
+  constructor(onChange, onSave) {
+    this.onChange = onChange || (() => {});
+    this.onSave = onSave || (() => {});
     this.uid = 0;
-    this.lvlIdx = 0;
-    this.score = 0;
+    this.progress = emptyProgress();
     this.effects = [];
     this.talk = null;
-    this.startLevel();
-    this.onChange = onChange; // collegato solo dopo il primo livello, per non ridisegnare durante il render
-    this.onCheckpoint = onCheckpoint || (() => {}); // idem: il livello 0 iniziale non deve sovrascrivere un salvataggio
+    // Finché non parte un ordine (startLevel o resume) non c'è niente in tavola.
+    this.lvl = null;
+    this.lvlIdx = 0;
+    this.score = 0; // punti dell'ordine in corso
+    this.moves = this.startMoves = 0;
+    this.got = {};
+    this.spots = {};
+    this.tiles = new Map();
+    this.grid = [];
+    this.modal = null;
+    this.over = true;
+    this.busy = false;
+    this.sel = null;
   }
 
   emit() { this.onChange(); }
 
-  // Riprende da un salvataggio (o riparte da zero con restore({ lvlIdx: 0, score: 0 })).
-  restore({ lvlIdx, score }) {
-    this.lvlIdx = lvlIdx;
-    this.score = score;
-    this.startLevel();
+  // ---------- salvataggio ----------
+  // Carica i progressi letti dal disco. Restituisce true se c'era una partita a metà (ora pronta a riprendere).
+  load(saved) {
+    if (!saved) return false;
+    this.progress = { unlocked: saved.unlocked, stars: saved.stars, best: saved.best };
+    if (!saved.current) return false;
+    this.resume(saved.current);
+    return true;
+  }
+
+  snapshot() {
+    return {
+      lvlIdx: this.lvlIdx, score: this.score, moves: this.moves, got: { ...this.got }, nonnoCount: this.nonnoCount,
+      grid: this.grid.map((row) => row.map(plainCell)),
+    };
+  }
+
+  // Scrive progressi e partita in corso. Si chiama solo a scacchiera ferma, quindi la griglia è completa.
+  persist() {
+    this.onSave({ ...this.progress, current: this.over ? null : this.snapshot() });
+  }
+
+  // C'è un ordine iniziato e non ancora finito?
+  inProgress() { return !!this.lvl && (!this.over || (!!this.modal && this.modal.type === 'resume')); }
+
+  // Cancella tutto: progressi, stelle e partita in corso.
+  reset() {
+    this.clearHint();
+    this.progress = emptyProgress();
+    this.lvl = null; this.modal = null; this.over = true;
+    this.persist();
+    this.emit();
   }
 
   // ---------- livello ----------
-  startLevel() {
-    this.lvl = levelFor(this.lvlIdx);
+  setup(idx, cells) {
     this.clearHint();
-    this.onCheckpoint({ lvlIdx: this.lvlIdx, score: this.score });
-    this.moves = this.startMoves = this.lvl.moves;
-    this.got = {};
-    this.nonnoCount = 0;
+    this.lvlIdx = idx;
+    this.lvl = levelFor(idx);
+    this.startMoves = this.lvl.moves;
     this.over = true;
     this.busy = false;
     this.sel = null;
     this.talk = null;
     this.tiles = new Map();
-    this.grid = [];
-    for (let r = 0; r < N; r++) {
-      this.grid.push([]);
-      for (let c = 0; c < N; c++) {
-        let t;
-        do { t = this.pick(); } while (
-          (c >= 2 && this.grid[r][c - 1].t === t && this.grid[r][c - 2].t === t) ||
-          (r >= 2 && this.grid[r - 1][c].t === t && this.grid[r - 2][c].t === t)
-        );
-        this.grid[r].push(this.makeTile(t, r, c));
-      }
-    }
-    if (!this.hasMoves()) return this.startLevel();
+    this.grid = cells.map((row, r) => row.map((x, c) => this.makeTile(x, r, c)));
     this.genSpots();
+  }
+
+  startLevel(idx = this.lvlIdx) {
+    this.setup(idx, newBoard(levelFor(idx)));
+    this.moves = this.startMoves;
+    this.score = 0;
+    this.got = {};
+    this.nonnoCount = 0;
     this.modal = { type: 'start' };
     this.emit();
   }
 
-  begin() { this.modal = null; this.over = false; this.emit(); this.armHint(); }
-  next() { this.lvlIdx++; this.startLevel(); }
+  resume(cur) {
+    this.setup(cur.lvlIdx, cur.grid);
+    this.moves = cur.moves;
+    this.score = cur.score;
+    this.got = { ...cur.got };
+    this.nonnoCount = cur.nonnoCount || 0;
+    this.modal = { type: 'resume' };
+    this.emit();
+  }
+
+  begin() { this.modal = null; this.over = false; this.persist(); this.emit(); this.armHint(); }
+  next() { this.startLevel(this.lvlIdx + 1); }
   retry() { this.startLevel(); }
 
   pick() { const ts = this.lvl.types; return ts[Math.floor(Math.random() * ts.length)]; }
@@ -113,7 +159,7 @@ export class Game {
     // Ingredienti (non pomodoro né mozzarella), con i tipi alternati nell'ordine in cui compaiono.
     const slots = [];
     for (const k in need) {
-      if (k == 0 || k == 1) continue;
+      if (+k === 0 || +k === 1) continue;
       this.spots[k] = [];
       for (let i = 0; i < need[k]; i++) slots.push({ k, i, p: (i + 0.5) / need[k] });
     }
@@ -129,9 +175,10 @@ export class Game {
   }
 
   // ---------- tessere ----------
-  makeTile(t, r, c, fromRow = r) {
+  // `src` è una cella delle regole: { t, sp, hp, lock }. La tessera aggiunge posizione e animazioni.
+  makeTile(src, r, c, fromRow = r) {
     const tile = {
-      id: ++this.uid, t, sp: null, r, c,
+      id: ++this.uid, ...plainCell(src), r, c,
       rv: new Animated.Value(fromRow), cv: new Animated.Value(c),
       sc: new Animated.Value(1), op: new Animated.Value(1), rot: new Animated.Value(0),
     };
@@ -188,7 +235,7 @@ export class Game {
 
   showHint() {
     if (this.busy || this.over || this.modal) return;
-    const m = this.findMove();
+    const m = findMove(this.grid);
     if (!m) return;
     const tiles = m.map(([r, c]) => this.grid[r][c]).filter(Boolean);
     this.hintTiles = tiles;
@@ -210,76 +257,20 @@ export class Game {
     });
   }
 
-  // ---------- regole ----------
-  tAt(r, c) { const x = this.grid[r] && this.grid[r][c]; return x && x.t < BOMB ? x.t : -1; }
-
-  findMatches() {
-    const g = [];
-    for (let r = 0; r < N; r++) {
-      let c = 0;
-      while (c < N) {
-        const t = this.tAt(r, c); let e = c + 1;
-        while (e < N && this.tAt(r, e) === t) e++;
-        if (t >= 0 && e - c >= 3) { const cells = []; for (let x = c; x < e; x++) cells.push([r, x]); g.push({ h: true, t, cells }); }
-        c = e;
-      }
-    }
-    for (let c = 0; c < N; c++) {
-      let r = 0;
-      while (r < N) {
-        const t = this.tAt(r, c); let e = r + 1;
-        while (e < N && this.tAt(e, c) === t) e++;
-        if (t >= 0 && e - r >= 3) { const cells = []; for (let y = r; y < e; y++) cells.push([y, c]); g.push({ h: false, t, cells }); }
-        r = e;
-      }
-    }
-    return g;
-  }
-
-  swapG(r1, c1, r2, c2) { const a = this.grid[r1][c1]; this.grid[r1][c1] = this.grid[r2][c2]; this.grid[r2][c2] = a; }
-
-  hasMoves() { return !!this.findMove(); }
-
-  // Una coppia di celle adiacenti che si possono scambiare, o null.
-  findMove() {
-    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
-      if (this.grid[r][c].sp === 'bomb') {
-        if (c + 1 < N) return [[r, c], [r, c + 1]];
-        return [[r, c], [r, c - 1]];
-      }
-      for (const [dr, dc] of [[0, 1], [1, 0]]) {
-        const r2 = r + dr, c2 = c + dc;
-        if (r2 >= N || c2 >= N) continue;
-        this.swapG(r, c, r2, c2);
-        const ok = this.findMatches().length > 0;
-        this.swapG(r, c, r2, c2);
-        if (ok) return [[r, c], [r2, c2]];
-      }
-    }
-    return null;
-  }
-
-  commonType() {
-    const cnt = {};
-    for (const row of this.grid) for (const t of row) if (t && t.t < BOMB) cnt[t.t] = (cnt[t.t] || 0) + 1;
-    let best = -1, bc = -1;
-    for (const k in cnt) {
-      const w = cnt[k] + (this.lvl.need[k] && (this.got[k] || 0) < this.lvl.need[k] ? 100 : 0);
-      if (w > bc) { bc = w; best = +k; }
-    }
-    return best;
-  }
-
-  ofType(t) {
-    const out = [];
-    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (this.grid[r][c] && this.grid[r][c].t === t) out.push(r * N + c);
-    return out;
-  }
-
   // ---------- input ----------
+  // Impasto crudo e ingredienti infarinati non si spostano: la tessera si scuote e basta.
+  refuse(tile) {
+    this.sel = null;
+    this.shake(tile);
+    haptic('error'); sfx('bad');
+    this.emit();
+  }
+
   tap(p) {
     if (this.busy || this.over) return;
     this.armHint();
+    const tile = this.grid[p.r][p.c];
+    if (!canMove(tile)) return this.refuse(tile);
     const s = this.sel;
     if (s && Math.abs(s.r - p.r) + Math.abs(s.c - p.c) === 1) { this.sel = null; this.trySwap(s.r, s.c, p.r, p.c); return; }
     this.sel = s && s.r === p.r && s.c === p.c ? null : p;
@@ -295,10 +286,11 @@ export class Game {
 
   async trySwap(r1, c1, r2, c2) {
     if (this.busy || this.over) return;
+    const a = this.grid[r1][c1], b = this.grid[r2][c2];
+    if (!canMove(a) || !canMove(b)) { this.armHint(); return this.refuse(canMove(a) ? b : a); }
     this.busy = true;
     this.clearHint();
-    const a = this.grid[r1][c1], b = this.grid[r2][c2];
-    this.swapG(r1, c1, r2, c2); this.move(a, r2, c2); this.move(b, r1, c1);
+    swapCells(this.grid, r1, c1, r2, c2); this.move(a, r2, c2); this.move(b, r1, c1);
     sfx('swap');
     this.emit();
     await wait(200);
@@ -308,14 +300,14 @@ export class Game {
       const bomb = a.sp === 'bomb' ? a : b, other = bomb === a ? b : a;
       let keys;
       if (other.sp === 'bomb') { keys = []; for (let i = 0; i < N * N; i++) keys.push(i); this.say('Forno a 900 gradi! 🔥'); other.sp = null; }
-      else keys = this.ofType(other.t);
-      bomb.sp = null; keys.push(bomb.r * N + bomb.c);
+      else keys = ofType(this.grid, other.t);
+      bomb.sp = null; keys.push(keyOf(bomb.r, bomb.c));
       haptic('heavy'); sfx('fire');
       await this.clearSet(new Set(keys), new Map(), 2);
       await this.resolve(null);
     } else {
-      if (!this.findMatches().length) {
-        this.swapG(r1, c1, r2, c2); this.move(a, r1, c1); this.move(b, r2, c2);
+      if (!findMatches(this.grid).length) {
+        swapCells(this.grid, r1, c1, r2, c2); this.move(a, r1, c1); this.move(b, r2, c2);
         haptic('error'); sfx('bad');
         await wait(200);
         this.shake(a); this.shake(b);
@@ -327,26 +319,22 @@ export class Game {
       this.moves--;
       await this.resolve([a, b]);
     }
-    if (!this.done() && this.moves > 0 && !this.hasMoves()) await this.shuffle();
+    if (!this.done() && this.moves > 0 && !findMove(this.grid)) await this.shuffle();
     this.busy = false;
     this.checkEnd();
-    if (!this.over) this.armHint();
+    if (!this.over) { this.persist(); this.armHint(); }
   }
 
   async resolve(swapped) {
     let combo = 0;
     while (true) {
-      const groups = this.findMatches();
+      const groups = findMatches(this.grid);
       if (!groups.length) break;
       combo++;
-      const clear = new Set(), create = new Map(), inH = new Set(), inV = new Set();
-      for (const g of groups) for (const [r, c] of g.cells) { const k = r * N + c; clear.add(k); (g.h ? inH : inV).add(k); }
-      for (const k of clear) if (inH.has(k) && inV.has(k)) create.set(k, 'bomb');
-      for (const g of groups) {
-        if (g.cells.length < 4 || g.cells.some(([r, c]) => create.has(r * N + c))) continue;
-        const pos = (swapped && g.cells.find(([r, c]) => swapped.includes(this.grid[r][c]))) || g.cells[g.cells.length >> 1];
-        create.set(pos[0] * N + pos[1], g.cells.length >= 5 ? 'bomb' : g.h ? 'row' : 'col');
-      }
+      const clear = new Set();
+      for (const g of groups) for (const [r, c] of g.cells) clear.add(keyOf(r, c));
+      const sw = swapped;
+      const create = planSpecials(groups, (r, c) => !!sw && sw.includes(this.grid[r][c]));
       await this.clearSet(clear, create, combo);
       swapped = null;
     }
@@ -354,76 +342,45 @@ export class Game {
     return combo;
   }
 
+  // Applica clearStep() delle regole e ci mette sopra animazioni, suoni e punti.
   async clearSet(clear, create, combo) {
-    // effetti a catena delle tessere speciali
-    const queue = [...clear], done = new Set();
-    let fired = false;
-    while (queue.length) {
-      const k = queue.pop();
-      if (done.has(k)) continue;
-      done.add(k);
-      const r = Math.floor(k / N), c = k % N, tile = this.grid[r][c];
-      if (!tile || !tile.sp || create.has(k)) continue;
-      fired = true;
-      let extra = [];
-      if (tile.sp === 'row') { for (let x = 0; x < N; x++) extra.push(r * N + x); this.fx({ kind: 'beam', h: true, i: r }); }
-      else if (tile.sp === 'col') { for (let y = 0; y < N; y++) extra.push(y * N + c); this.fx({ kind: 'beam', h: false, i: c }); }
-      else if (tile.sp === 'bomb') extra = this.ofType(this.commonType());
-      for (const e of extra) if (!clear.has(e)) { clear.add(e); queue.push(e); }
-    }
-    // nuove tessere speciali
-    for (const [k, sp] of create) {
-      const t = this.grid[Math.floor(k / N)][k % N];
-      if (!t) continue;
-      t.sp = sp;
-      if (sp === 'bomb') t.t = BOMB;
-      this.bounce(t);
-    }
-    if (create.size) { haptic('heavy'); sfx('special'); }
+    const wanted = (t) => !!this.lvl.need[t] && (this.got[t] || 0) < this.lvl.need[t];
+    const { beams, fired, created, removed, damaged } = clearStep(this.grid, clear, create, wanted);
+    for (const b of beams) this.fx({ kind: 'beam', ...b });
+    for (const t of created) this.bounce(t);
+    for (const t of damaged) this.bounce(t);
+    if (created.length) { haptic('heavy'); sfx('special'); }
     else if (fired) sfx('fire');
-    // rimozione
-    let n = 0, pine = 0, sr = 0, scc = 0;
-    const popped = [], flown = {};
-    for (const k of clear) {
-      if (create.has(k)) continue;
-      const r = Math.floor(k / N), c = k % N, t = this.grid[r][c];
-      if (!t) continue;
-      if (this.lvl.need[t.t] && (this.got[t.t] || 0) < this.lvl.need[t.t] && (flown[t.t] || 0) < 2) {
+
+    let pine = 0, sr = 0, scc = 0;
+    const flown = {};
+    for (const { x: t, r, c } of removed) {
+      if (wanted(t.t) && (flown[t.t] || 0) < 2) {
         flown[t.t] = (flown[t.t] || 0) + 1;
         this.fx({ kind: 'fly', t: t.t, r, c });
       }
       this.collect(t.t);
       if (t.t === 6) pine++;
-      n++; sr += r; scc += c;
-      this.pop(t); popped.push(t); this.grid[r][c] = null;
+      sr += r; scc += c;
+      this.pop(t);
     }
+    const n = removed.length;
     const pts = n * 10 * combo;
     this.score += pts;
-    if (n) { this.fx({ kind: 'float', text: '+' + pts, r: sr / n, c: scc / n }); haptic('light'); if (!create.size && !fired) sfx('pop' + Math.min(combo, 4)); }
+    if (n) { this.fx({ kind: 'float', text: '+' + pts, r: sr / n, c: scc / n }); haptic('light'); if (!created.length && !fired) sfx('pop' + Math.min(combo, 4)); }
     if (pine && this.lvl.nonno) sfx('nonno');
     if (pine && this.lvl.nonno) this.say(NONNO[this.nonnoCount++ % NONNO.length], '👴', true);
     this.emit();
     await wait(180);
-    popped.forEach((t) => this.tiles.delete(t.id));
+    removed.forEach(({ x }) => this.tiles.delete(x.id));
     await this.gravity();
     await wait(280);
   }
 
   async gravity() {
-    const fresh = [];
-    for (let c = 0; c < N; c++) {
-      let w = N - 1;
-      for (let r = N - 1; r >= 0; r--) {
-        const t = this.grid[r][c];
-        if (t) { if (w !== r) { this.grid[w][c] = t; this.grid[r][c] = null; this.move(t, w, c); } w--; }
-      }
-      const k = w + 1;
-      for (let r = w; r >= 0; r--) {
-        const t = this.makeTile(this.pick(), r, c, r - k);
-        this.grid[r][c] = t;
-        fresh.push(t);
-      }
-    }
+    const { moved, holes } = collapse(this.grid);
+    for (const m of moved) this.move(m.x, m.r, m.c);
+    const fresh = holes.map((h) => (this.grid[h.r][h.c] = this.makeTile({ t: this.pick() }, h.r, h.c, h.from)));
     this.emit();
     await nextFrame();
     for (const t of fresh) this.move(t, t.r, t.c);
@@ -431,24 +388,21 @@ export class Game {
 
   async shuffle() {
     this.say('Rimescolo gli ingredienti…');
-    for (let i = 0; i < 100; i++) {
-      for (const row of this.grid) for (const t of row) if (!t.sp) t.t = this.pick();
-      if (!this.findMatches().length && this.hasMoves()) break;
-    }
+    reshuffle(this.grid, () => this.pick());
     this.emit();
     await wait(300);
   }
 
   // ---------- stato ----------
   collect(t) {
-    if (t >= BOMB) return;
+    if (t >= DOUGH) return;
     this.got[t] = (this.got[t] || 0) + 1;
     if (this.lvl.need[t] && this.got[t] === this.lvl.need[t]) this.say(`${T[t].n}: perfetto così!`);
   }
 
   done() { for (const k in this.lvl.need) if ((this.got[k] || 0) < this.lvl.need[k]) return false; return true; }
 
-  stars() { const r = this.moves / this.startMoves; return r >= 0.35 ? 3 : r >= 0.12 ? 2 : 1; }
+  stars() { return starsFor(this.moves, this.startMoves); }
 
   async checkEnd() {
     if (this.over) return;
@@ -456,13 +410,18 @@ export class Game {
       this.over = true;
       const bonus = this.moves * 50;
       this.score += bonus;
+      const stars = this.stars();
+      const { progress, record } = recordWin(this.progress, this.lvlIdx, stars, this.score);
+      this.progress = progress;
+      this.persist();
       haptic('success'); sfx('win');
       this.emit();
       await wait(400);
-      this.modal = { type: 'win', bonus, stars: this.stars() };
+      this.modal = { type: 'win', bonus, stars, record };
       this.emit();
     } else if (this.moves <= 0) {
       this.over = true;
+      this.persist();
       haptic('error'); sfx('lose');
       await wait(400);
       this.modal = { type: 'lose' };

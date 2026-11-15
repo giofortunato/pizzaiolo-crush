@@ -33,7 +33,7 @@ export default function Pizza({ size, lvl, got, spots, seed = 1, final = false }
 
   // Più pezzi ci sono, più sono piccoli, così non si sovrappongono.
   let nTop = 0;
-  for (const k in spots) if (k != 1) nTop += spots[k].length;
+  for (const k in spots) if (+k !== 1) nTop += spots[k].length;
   const fs = size * clamp(0.36 / Math.sqrt(Math.max(1, nTop)), 0.07, 0.12);
   const nCheese = (spots[1] || []).length;
   const cheeseR = size * clamp(0.25 / Math.sqrt(Math.max(1, nCheese)), 0.04, 0.065);
@@ -44,7 +44,7 @@ export default function Pizza({ size, lvl, got, spots, seed = 1, final = false }
     for (let i = 0; i < n; i++) {
       const [x, y, rot, shape] = spots[k][i];
       const px = cx + x * R, py = cx + y * R;
-      if (k == 1) {
+      if (+k === 1) {
         cheese.push(<Path key={'ms' + i} d={blobPath(px + size * 0.006, py + size * 0.01, cheeseR, rot, shape)} fill="#7a1d0e" opacity={0.25} />);
         cheese.push(<Path key={'m' + i} d={blobPath(px, py, cheeseR, rot, shape)} fill="#fff3d6" />);
         cheese.push(<Circle key={'mh' + i} cx={px - cheeseR * 0.25} cy={py - cheeseR * 0.25} r={cheeseR * 0.35} fill="#fffdf6" opacity={0.8} />);

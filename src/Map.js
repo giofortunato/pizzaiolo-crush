@@ -3,6 +3,7 @@ import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { LEVELS, levelFor } from './data';
 import { totalStars, totalScore, dayKey, dailyLevel, dailyDone, dailyStreak, DAILY_COINS } from './progress';
 import { C, F } from './theme';
+import { CREDITS } from './music';
 
 const RUSH_UNLOCK = 3; // l'ora di punta si apre dopo tre ordini serviti
 
@@ -102,6 +103,7 @@ export default function LevelMap({ game, onPick, settings }) {
           <Text style={styles.stats}>
             Pizze servite: {p.stats.served} · Partite: {p.stats.games} · Combo più lunga: ×{p.stats.combo}
           </Text>
+          <Text style={styles.credits}>{CREDITS}</Text>
           {p.unlocked > 0 && (
             <Pressable
               onPress={() => { if (confirm) { setConfirm(false); game.reset(); } else setConfirm(true); }}
@@ -146,6 +148,7 @@ const styles = StyleSheet.create({
   specialE: { fontSize: 28, includeFontPadding: false },
   specialT: { color: C.wood, fontFamily: F.display, fontSize: 16 },
   specialS: { color: C.wood, fontFamily: F.body, fontSize: 12.5, opacity: 0.8, lineHeight: 16 },
+  credits: { color: C.cream, fontFamily: F.body, fontSize: 11, opacity: 0.45, textAlign: 'center' },
   stats: { color: C.cream, fontFamily: F.body, fontSize: 12.5, opacity: 0.7, textAlign: 'center', marginBottom: 4 },
 
   list: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 10, paddingBottom: 24 },

@@ -1,16 +1,18 @@
 // Brani di sottofondo, uno per "umore" della pizza (vedi `mood` in data.js).
+// Musica di Sascha Ende (ende.app), licenza CC BY 4.0: i crediti sono in README.md e nella mappa (CREDITS).
 //
-// Per usare brani veri: metti i file (mp3, m4a o wav) in assets/sounds/music/ e scrivi qui il require,
-// per esempio   piccante: require('../assets/sounds/music/piccante.mp3'),
-// Un umore senza brano (null) usa quello di DEFAULT_TRACK. Scegli brani senza royalty e con licenza
-// che permetta l'uso in un'app (es. Pixabay Content License); segna la fonte in README.md.
+// Per aggiungere un brano: file in assets/sounds/music/, compresso con
+//   afconvert -f m4af -d aac -b 96000 brano.mp3 assets/sounds/music/<umore>.m4a
+// e il require qui sotto. Un umore senza brano (null) usa quello di DEFAULT_TRACK.
 export const TRACKS = {
-  napoletana: require('../assets/sounds/music.wav'), // tarantella sintetizzata (scripts/make-music.py), da sostituire
-  piccante: null,   // Diavola, Carbonara, Ora di punta: veloce, minore
-  americana: null,  // Hawaiana, Würstel e patatine: maggiore, saltellante
-  lenta: null,      // Funghi e olive, Capricciosa, Parmigiana, Boscaiola: cantabile, tranquilla
-  mare: null,       // Frutti di mare, Quattro stagioni: valzer, aperto
+  napoletana: require('../assets/sounds/music/napoletana.m4a'), // Italy - Espresso in the Piazza
+  piccante: require('../assets/sounds/music/piccante.m4a'),     // Italy - Kitchen Tarantella
+  americana: null,  // previsto: Ultimate Tropical Vol. 13
+  lenta: null,      // previsto: Italy - Venice by Gondola
+  mare: null,       // previsto: Italy - Last Waltz in Palermo
 };
 export const DEFAULT_TRACK = 'napoletana';
-// Volume della musica rispetto agli effetti (0-1). I brani veri sono già masterizzati: 0.35 li tiene sotto ai pop.
+// Volume della musica rispetto agli effetti (0-1). I brani sono già masterizzati: 0.35 li tiene sotto ai pop.
 export const MUSIC_VOLUME = 0.35;
+
+export const CREDITS = 'Musica: Sascha Ende (ende.app), licenza CC BY 4.0';

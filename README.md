@@ -29,20 +29,24 @@ non la accendi con 🎵. Ogni pizza ha un "umore" (`mood` in `src/data.js`): nap
 americana, lenta, mare. In `src/music.js` si collega un brano a ogni umore; quelli senza brano
 usano `napoletana`.
 
-Brani di **Sascha Ende** ([ende.app](https://ende.app)), licenza
+Due brani sono di **Sascha Ende** ([ende.app](https://ende.app)), licenza
 [CC BY 4.0](https://ende.app/standard-license): uso gratuito anche commerciale, con obbligo di citare
 l'autore (fatto qui e in fondo alla mappa). Per le condizioni del sito: non dichiararli propri, non
 registrarli in sistemi di riconoscimento audio (Content ID).
 
-| Umore | Brano | File |
-|---|---|---|
-| napoletana | [Italy - Espresso in the Piazza](https://ende.app/en/song/13956-italy-espresso-in-the-piazza) | `assets/sounds/music/napoletana.m4a` |
-| piccante | [Italy - Kitchen Tarantella](https://ende.app/en/song/13958-italy-kitchen-tarantella) | `assets/sounds/music/piccante.m4a` |
-| americana | per ora *Kitchen Tarantella*; previsto: [Ultimate Tropical Vol. 13](https://ende.app/en/song/13408-ultimate-tropical-vol-13) | `piccante.m4a` |
-| lenta | previsto: [Italy - Venice by Gondola](https://ende.app/en/song/13962-italy-venice-by-gondola) | — |
-| mare | previsto: [Italy - Last Waltz in Palermo](https://ende.app/en/song/13964-italy-last-waltz-in-palermo) | — |
+Tre brani vengono da **Pixabay**, con la [Pixabay Content License](https://pixabay.com/service/license-summary/):
+uso gratuito anche commerciale, attribuzione non obbligatoria (la diamo comunque); non si possono
+ridistribuire da soli, fuori dal gioco. Sono stati scelti brani **senza Content ID**.
 
-I file sono compressi con `afconvert -f m4af -d aac -b 96000 brano.mp3 assets/sounds/music/<umore>.m4a`.
+| Umore | Brano | Fonte | File |
+|---|---|---|---|
+| napoletana | [Italy - Espresso in the Piazza](https://ende.app/en/song/13956-italy-espresso-in-the-piazza) | Sascha Ende, CC BY 4.0 | `napoletana.m4a` |
+| piccante | [Italy - Kitchen Tarantella](https://ende.app/en/song/13958-italy-kitchen-tarantella) | Sascha Ende, CC BY 4.0 | `piccante.m4a` |
+| americana | [Italian Tarantella](https://pixabay.com/music/world-italian-tarantella-571958/) | Art_Roseman, Pixabay | `americana.m4a` |
+| lenta | [Notte Stellata - Italian Accordion Music](https://pixabay.com/music/folk-notte-stellata-italian-accordion-music-345499/) | BFCMUSIC, Pixabay | `lenta.m4a` |
+| mare | [Atlas • Italy](https://pixabay.com/music/orchestral-atlas-italy-555394/) | Vadim_Makes_Sound, Pixabay | `mare.m4a` |
+
+I file sono in `assets/sounds/music/`, compressi con `afconvert -f m4af -d aac -b 96000 brano.mp3 assets/sounds/music/<umore>.m4a`
 
 ## Struttura
 

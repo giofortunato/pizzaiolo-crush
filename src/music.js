@@ -1,5 +1,5 @@
 // Brani di sottofondo, uno per "umore" della pizza (vedi `mood` in data.js).
-// Musica di Sascha Ende (ende.app, licenza CC BY 4.0) e brani generati con Suno: crediti in README.md e nella mappa (CREDITS).
+// Musica di Sascha Ende (ende.app, CC BY 4.0) e da Pixabay (Pixabay Content License): crediti in README.md e nella mappa (CREDITS).
 //
 // Per aggiungere un brano: file in assets/sounds/music/, compresso con
 //   afconvert -f m4af -d aac -b 96000 brano.mp3 assets/sounds/music/<umore>.m4a
@@ -7,12 +7,12 @@
 export const TRACKS = {
   napoletana: require('../assets/sounds/music/napoletana.m4a'), // Italy - Espresso in the Piazza (Sascha Ende)
   piccante: require('../assets/sounds/music/piccante.m4a'),     // Italy - Kitchen Tarantella (Sascha Ende)
-  americana: require('../assets/sounds/music/americana.m4a'),   // generato con Suno: folk italiano allegro (fisarmonica, mandolino, tuba)
-  lenta: require('../assets/sounds/music/lenta.m4a'),           // generato con Suno: valzer italiano lento, versione 1
-  mare: require('../assets/sounds/music/mare.m4a'),             // generato con Suno: valzer italiano lento, versione 2
+  americana: require('../assets/sounds/music/americana.m4a'),   // Italian Tarantella, Art_Roseman (Pixabay)
+  lenta: require('../assets/sounds/music/lenta.m4a'),           // Notte Stellata - Italian Accordion Music, BFCMUSIC (Pixabay)
+  mare: require('../assets/sounds/music/mare.m4a'),             // Atlas • Italy, Vadim_Makes_Sound (Pixabay)
 };
 export const DEFAULT_TRACK = 'napoletana';
 // Volume della musica rispetto agli effetti (0-1). I brani sono già masterizzati: 0.35 li tiene sotto ai pop.
 export const MUSIC_VOLUME = 0.35;
 
-export const CREDITS = 'Musica: Sascha Ende (ende.app), licenza CC BY 4.0 · altri brani generati con Suno';
+export const CREDITS = 'Musica: Sascha Ende (ende.app, CC BY 4.0) · Art_Roseman, BFCMUSIC, Vadim_Makes_Sound (Pixabay)';

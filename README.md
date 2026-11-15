@@ -34,26 +34,19 @@ Due brani sono di **Sascha Ende** ([ende.app](https://ende.app)), licenza
 l'autore (fatto qui e in fondo alla mappa). Per le condizioni del sito: non dichiararli propri, non
 registrarli in sistemi di riconoscimento audio (Content ID).
 
-Tre brani sono generati con **Suno** (suno.com) dall'account del progetto, con il **piano gratuito**:
-valgono solo per **uso non commerciale**. Prima di pubblicare il gioco su uno store vanno rigenerati
-con un abbonamento Suno a pagamento (i diritti dipendono dal piano al momento della creazione) oppure
-sostituiti.
+Tre brani vengono da **Pixabay**, con la [Pixabay Content License](https://pixabay.com/service/license-summary/):
+uso gratuito anche commerciale, attribuzione non obbligatoria (la diamo comunque); non si possono
+ridistribuire da soli, fuori dal gioco. Sono stati scelti brani **senza Content ID**.
 
 | Umore | Brano | Fonte | File |
 |---|---|---|---|
 | napoletana | [Italy - Espresso in the Piazza](https://ende.app/en/song/13956-italy-espresso-in-the-piazza) | Sascha Ende, CC BY 4.0 | `napoletana.m4a` |
 | piccante | [Italy - Kitchen Tarantella](https://ende.app/en/song/13958-italy-kitchen-tarantella) | Sascha Ende, CC BY 4.0 | `piccante.m4a` |
-| americana | Pizzaiolo Crush - allegra | Suno, piano gratuito | `americana.m4a` |
-| lenta | Pizzaiolo Crush - valzer (versione 1) | Suno, piano gratuito | `lenta.m4a` |
-| mare | Pizzaiolo Crush - valzer (versione 2) | Suno, piano gratuito | `mare.m4a` |
-
-Descrizioni usate su Suno (modalità Advanced, testo vuoto = strumentale), scelte per legare con i due brani di Sascha Ende:
-
-- allegra: `Italian folk instrumental, playful accordion and mandolin, acoustic guitar, upright bass, bouncy oom-pah tuba, medium tempo, cheerful and humorous, Italian restaurant, acoustic, no vocals`
-- valzer (le due versioni della stessa richiesta): `Italian folk instrumental, accordion lead melody, Neapolitan mandolin, acoustic guitar, upright bass, slow gentle 3/4 waltz, warm trattoria atmosphere, sunny and nostalgic, acoustic, no vocals`
+| americana | [Italian Tarantella](https://pixabay.com/music/world-italian-tarantella-571958/) | Art_Roseman, Pixabay | `americana.m4a` |
+| lenta | [Notte Stellata - Italian Accordion Music](https://pixabay.com/music/folk-notte-stellata-italian-accordion-music-345499/) | BFCMUSIC, Pixabay | `lenta.m4a` |
+| mare | [Atlas • Italy](https://pixabay.com/music/orchestral-atlas-italy-555394/) | Vadim_Makes_Sound, Pixabay | `mare.m4a` |
 
 I file sono in `assets/sounds/music/`, compressi con `afconvert -f m4af -d aac -b 96000 brano.mp3 assets/sounds/music/<umore>.m4a`
-(da Suno scaricare in MP3: l'M4A di Suno è in Opus e afconvert non lo legge).
 
 ## Struttura
 

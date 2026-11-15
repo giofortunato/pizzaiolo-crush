@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
-import { View, Text, Pressable, Share, StyleSheet, Animated, Easing, AccessibilityInfo, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, Share, StyleSheet, Animated, Easing, AccessibilityInfo } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
@@ -16,6 +16,7 @@ import { loadProgress, saveProgress } from './src/save';
 import { initSound, setMuted, setMusic } from './src/sound';
 import { initHaptics, setHaptics } from './src/haptic';
 import { motion } from './src/motion';
+import { useLayout } from './src/layout';
 import { dailyStreak } from './src/progress';
 
 export default function App() {
@@ -168,7 +169,8 @@ function Root() {
   const [music, setMusicState] = useState(false);
   const [haptics, setHapticsState] = useState(true);
   const [fontsLoaded, fontError] = useFonts({ LilitaOne_400Regular, Nunito_600SemiBold, Nunito_600SemiBold_Italic, Nunito_800ExtraBold });
-  const { width, height } = useWindowDimensions();
+  const layout = useLayout();
+  const { width, height } = layout;
 
   // All'avvio: se c'era un ordine lasciato a metà si riparte da lì, altrimenti dalla mappa.
   useEffect(() => {
@@ -211,15 +213,15 @@ function Root() {
     <SafeAreaView style={styles.root}>
       <OvenGlow width={width} height={height} />
       {playing ? (
-        <GameScreen game={game} width={width} height={height} onMap={toMap} muted={muted} onMute={settings.toggleMute} />
+        <GameScreen game={game} onMap={toMap} muted={muted} onMute={settings.toggleMute} />
       ) : (
-        <View style={{ flex: 1, width: Math.min(width, 464) }}><LevelMap game={game} onPick={pick} settings={settings} /></View>
+        <View style={{ flex: 1, width: layout.colW }}><LevelMap game={game} onPick={pick} settings={settings} cols={layout.mapCols} /></View>
       )}
     </SafeAreaView>
   );
 }
 
-function GameScreen({ game, width, height, onMap, muted, onMute }) {
+function GameScreen({ game, onMap, muted, onMute }) {
   const [layerRef, layerBox, onLayerLayout] = useBox();
   const [boardRef, boardBox, onBoardLayout] = useBox();
   const [pizzaRef, pizzaBox, onPizzaLayout] = useBox();
@@ -229,7 +231,8 @@ function GameScreen({ game, width, height, onMap, muted, onMute }) {
     Animated.spring(pizzaScale, { toValue: 1, speed: 20, bounciness: 10, useNativeDriver: true }).start();
   };
 
-  const boardW = Math.max(240, Math.min(width - 24, 440, height - 340));
+  const layout = useLayout();
+  const { boardW } = layout;
   const lvl = game.lvl;
   const talk = game.talk;
   const rush = game.mode === 'rush';
@@ -237,7 +240,7 @@ function GameScreen({ game, width, height, onMap, muted, onMute }) {
 
   return (
     <>
-      <View ref={layerRef} onLayout={onLayerLayout} style={[styles.app, { width: Math.min(width, 464) }]}>
+      <View ref={layerRef} onLayout={onLayerLayout} style={[styles.app, { width: layout.colW }]}>
         <View style={styles.header}>
           <Text style={[styles.h1, { flexShrink: 1 }]} numberOfLines={1} adjustsFontSizeToFit>Pizzaiolo Crush</Text>
           <View style={styles.headerRight}>
@@ -284,7 +287,7 @@ function GameScreen({ game, width, height, onMap, muted, onMute }) {
         ) : (
           <View style={styles.bottom}>
             <Animated.View ref={pizzaRef} onLayout={onPizzaLayout} style={{ transform: [{ scale: pizzaScale }] }}>
-              <Pizza size={104} lvl={lvl} got={game.got} spots={game.spots} />
+              <Pizza size={layout.pizza} lvl={lvl} got={game.got} spots={game.spots} />
             </Animated.View>
             <View style={{ flex: 1, gap: 8 }}>
               <View style={styles.goals}>
@@ -331,6 +334,7 @@ function GameScreen({ game, width, height, onMap, muted, onMute }) {
 }
 
 function GameModal({ game, onMap }) {
+  const layout = useLayout();
   const { lvl, modal } = game;
   const [shared, setShared] = useState(false);
   let body;
@@ -425,7 +429,7 @@ function GameModal({ game, onMap }) {
       <>
         <Text style={styles.h2}>{lvl.pizza} servita! {lvl.face}</Text>
         <Pop delay={150} style={{ alignSelf: 'center', marginVertical: 6 }}>
-          <Pizza size={190} lvl={lvl} got={game.got} spots={game.spots} seed={game.lvlIdx} final />
+          <Pizza size={layout.pizzaFinal} lvl={lvl} got={game.got} spots={game.spots} seed={game.lvlIdx} final />
         </Pop>
         <View style={styles.starsRow}>
           {[0, 1, 2].map((i) => (
@@ -473,7 +477,7 @@ function GameModal({ game, onMap }) {
   useEffect(() => { Animated.spring(v, { toValue: 1, speed: 16, bounciness: 7, useNativeDriver: true }).start(); }, [v]);
   return (
     <Animated.View style={[styles.overlay, { opacity: v }]}>
-      <Animated.View style={[styles.card, { transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] }) }, { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [28, 0] }) }] }]}>
+      <Animated.View style={[styles.card, { maxWidth: layout.cardMax, transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] }) }, { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [28, 0] }) }] }]}>
         {body}
       </Animated.View>
     </Animated.View>

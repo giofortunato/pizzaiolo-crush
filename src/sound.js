@@ -44,7 +44,7 @@ export async function initSound() {
   try {
     music = createAudioPlayer(MUSIC);
     music.loop = true;
-    music.volume = 0.22; // sottofondo: gli effetti devono restare in primo piano
+    music.volume = 0.18; // sottofondo: gli effetti devono restare in primo piano
     // La musica si ferma quando l'app va in secondo piano e riparte al ritorno.
     AppState.addEventListener('change', syncMusic);
   } catch {}

@@ -39,6 +39,7 @@ export async function initSound() {
     for (const k in SOURCES) players[k] = createAudioPlayer(SOURCES[k]);
     ready = true;
   } catch {}
+  prepareMusic();
   // La musica si ferma quando l'app va in secondo piano e riparte al ritorno.
   AppState.addEventListener('change', syncMusic);
   return { muted, music: musicOn };
@@ -46,10 +47,11 @@ export async function initSound() {
 
 // ---------- musica ----------
 // La musica parte quando si inforna (playMusic con l'umore dell'ordine) e si ferma a pizza finita (stopMusic).
-// Sulla mappa non suona. Ogni cambio passa da una dissolvenza breve.
-let mood = null;        // umore richiesto, o null se deve tacere
-let player = null;      // brano in corso
-let playerSrc = null;
+// Sulla mappa non suona. I brani si preparano all'avvio (prepareMusic), così all'"Inforna!" sono già carichi:
+// al primo avvio un brano creato all'ultimo momento a volte non si caricava affatto.
+let mood = null;          // umore richiesto, o null se deve tacere
+let current = null;       // lettore che sta suonando (o sfumando verso il silenzio)
+const tracks = new Map(); // file -> lettore, uno per brano
 const fades = new Map();
 const FADE_MS = 400, STEPS = 10;
 
@@ -64,30 +66,43 @@ function ramp(p, to, done) {
   fades.set(p, timer);
 }
 
-function fadeOutAndDrop(p) {
-  ramp(p, 0, () => { try { p.pause(); p.remove(); } catch {} });
+function trackFor(src) {
+  let p = tracks.get(src);
+  if (p) return p;
+  p = createAudioPlayer(src);
+  p.loop = true;
+  p.volume = 0;
+  // Appena il brano è caricato, se è proprio quello che deve suonare, parte.
+  p.addListener('playbackStatusUpdate', (st) => {
+    if (st.isLoaded && current === p && wanted() && !p.playing) { try { p.play(); } catch {} }
+  });
+  tracks.set(src, p);
+  return p;
 }
+
+function prepareMusic() {
+  try { for (const k in TRACKS) if (TRACKS[k]) trackFor(TRACKS[k]); } catch {}
+}
+
+const srcFor = (m) => (m ? TRACKS[m] || TRACKS[DEFAULT_TRACK] : null);
+const wanted = () => !!srcFor(mood) && musicOn && !muted && AppState.currentState === 'active';
 
 export function playMusic(which) { mood = which || DEFAULT_TRACK; syncMusic(); }
 export function stopMusic() { mood = null; syncMusic(); }
 
+function silence(p) { ramp(p, 0, () => { if (p !== current || !wanted()) try { p.pause(); } catch {} }); }
+
 function syncMusic() {
-  const src = mood ? TRACKS[mood] || TRACKS[DEFAULT_TRACK] : null;
-  const want = !!src && musicOn && !muted && AppState.currentState === 'active';
   try {
-    if (!want) {
-      if (player) ramp(player, 0, () => { try { player && player.pause(); } catch {} });
-      return;
-    }
-    if (player && playerSrc !== src) { fadeOutAndDrop(player); player = null; }
-    if (!player) {
-      player = createAudioPlayer(src);
-      player.loop = true;
-      player.volume = 0;
-      playerSrc = src;
-    }
-    player.play();
-    ramp(player, MUSIC_VOLUME);
+    if (!wanted()) { if (current) silence(current); return; }
+    const next = trackFor(srcFor(mood));
+    if (current && current !== next) silence(current);
+    if (current !== next) { try { next.seekTo(0).catch(() => {}); } catch {} }
+    current = next;
+    next.play();
+    ramp(next, MUSIC_VOLUME);
+    // Rete di sicurezza: se dopo un attimo il brano non suona ancora, si riprova.
+    setTimeout(() => { if (current === next && wanted() && !next.playing) { try { next.play(); } catch {} } }, 1500);
   } catch {}
 }
 

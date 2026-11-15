@@ -22,6 +22,20 @@ npx eas-cli@latest update --channel preview --environment preview --message "cos
 
 Poi apri **Expo Go** con lo stesso account: il progetto compare nell'elenco, con l'ultimo aggiornamento del ramo `preview`.
 
+## Musica
+
+La musica parte quando inforni e si ferma a pizza finita; sulla mappa non suona. È spenta finché
+non la accendi con 🎵. Ogni pizza ha un "umore" (`mood` in `src/data.js`): napoletana, piccante,
+americana, lenta, mare. In `src/music.js` si collega un brano a ogni umore; quelli senza brano
+usano `napoletana`, che per ora è una tarantella sintetizzata da `scripts/make-music.py`.
+
+Per mettere brani veri: file mp3/m4a/wav in `assets/sounds/music/`, il `require` in `src/music.js`,
+e qui sotto la fonte e la licenza di ciascuno.
+
+| Umore | Brano | Fonte e licenza |
+|---|---|---|
+| napoletana | `assets/sounds/music.wav` | sintetizzato in questo repository |
+
 ## Struttura
 
 | File | Cosa fa |

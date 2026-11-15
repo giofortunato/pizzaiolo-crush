@@ -5,7 +5,7 @@ import {
   newBoard, reshuffle, comboClear, starsFor, plainCell,
 } from './rules';
 import { emptyProgress, recordWin, recordDaily, dailyLevel, dailyStreak, dayKey, seeded, DAILY_COINS } from './progress';
-import { sfx } from './sound';
+import { sfx, playMusic, stopMusic } from './sound';
 import { haptic } from './haptic';
 import { motion } from './motion';
 
@@ -80,6 +80,7 @@ export class Game {
   // Si torna alla mappa. Un ordine resta in sospeso; l'ora di punta invece si abbandona.
   leave() {
     this.clearHint();
+    stopMusic();
     this.tool = null;
     if (this.mode === 'rush') { this.stopClock(); this.lvl = null; this.modal = null; this.over = true; }
     this.emit();
@@ -89,6 +90,7 @@ export class Game {
   reset() {
     this.clearHint();
     this.stopClock();
+    stopMusic();
     this.progress = emptyProgress();
     this.lvl = null; this.modal = null; this.over = true;
     this.persist();
@@ -163,6 +165,7 @@ export class Game {
   begin() {
     this.modal = null;
     this.over = false;
+    playMusic(this.lvl.mood);
     if (this.isNew) { this.isNew = false; this.stat({ games: this.progress.stats.games + 1 }); }
     this.persist();
     // Primissima partita: una mano mostra subito quale scambio fare.
@@ -228,6 +231,7 @@ export class Game {
     this.moves += LOGS.moves;
     this.modal = null;
     this.over = false;
+    playMusic(this.lvl.mood);
     this.persist();
     this.say(`Altre ${LOGS.moves} mosse. Forza!`);
     this.armHint();
@@ -536,6 +540,7 @@ export class Game {
       const record = this.score > this.progress.rush;
       this.progress = { ...this.progress, rush: Math.max(this.progress.rush, this.score) };
       this.persist();
+      stopMusic();
       haptic('success'); sfx('win');
       this.emit();
       await wait(400);
@@ -558,6 +563,7 @@ export class Game {
         this.progress = res.progress; record = res.record; gained = res.gained;
       }
       this.persist();
+      stopMusic();
       haptic('success'); sfx('win');
       this.emit();
       await wait(400);
@@ -566,6 +572,7 @@ export class Game {
     } else if (this.moves <= 0) {
       this.over = true;
       this.persist();
+      stopMusic();
       haptic('error'); sfx('lose');
       await wait(400);
       this.modal = { type: 'lose' };

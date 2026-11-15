@@ -23,97 +23,98 @@ export const T = [
   { e: '🍤', n: 'Gamberi' },
 ];
 
+// `mood` sceglie la musica di sottofondo (vedi src/music.js).
 // Le mosse degli ordini sono tarate con `node scripts/sim.mjs` (difficoltà crescente).
 // Ostacoli (dal sesto ordine in poi):
 //   flour: quanti ingredienti partono infarinati (non si possono spostare, ma se li allinei vengono via)
 //   dough: quanti panetti di impasto crudo (non si spostano; servono due file lì accanto per cuocerli)
 export const LEVELS = [
   {
-    pizza: 'Margherita', face: '🧑', who: 'Marco', types: [0, 1, 2, 3, 4],
+    pizza: 'Margherita', mood: 'napoletana', face: '🧑', who: 'Marco', types: [0, 1, 2, 3, 4],
     need: { 0: 12, 1: 12, 2: 6 }, moves: 20,
     hi: 'Una margherita, semplice semplice!',
     win: 'Questa sì che è una margherita!', lose: 'Vabbè, prendo un kebab…',
   },
   {
-    pizza: 'Funghi e olive', face: '👩', who: 'Giulia', types: [0, 1, 2, 3, 4],
+    pizza: 'Funghi e olive', mood: 'lenta', face: '👩', who: 'Giulia', types: [0, 1, 2, 3, 4],
     need: { 1: 12, 3: 14, 4: 12 }, moves: 19,
     hi: 'Tanti funghi, mi raccomando!',
     win: 'Buonissima, torno domani!', lose: 'Ho una riunione, scappo.',
   },
   {
-    pizza: 'Diavola', face: '🧔', who: 'Salvo', types: [0, 1, 2, 3, 4, 5],
+    pizza: 'Diavola', mood: 'piccante', face: '🧔', who: 'Salvo', types: [0, 1, 2, 3, 4, 5],
     need: { 0: 15, 1: 12, 5: 18 }, moves: 29,
     hi: 'Piccante. Ma piccante davvero.',
     win: 'Brucia! Perfetta! 🔥', lose: 'Troppo lenta, fratello.',
   },
   {
-    pizza: 'Hawaiana', face: '🤠', who: 'Kevin (Ohio)', types: [0, 1, 2, 3, 4, 6],
+    pizza: 'Hawaiana', mood: 'americana', face: '🤠', who: 'Kevin (Ohio)', types: [0, 1, 2, 3, 4, 6],
     need: { 0: 12, 1: 12, 6: 15 }, moves: 25, nonno: true,
     hi: 'Pineapple pizza, please! Lots of it!',
     win: 'Best pizza in Italy, dude!', lose: "Okay… I'll go to Domino's.",
   },
   {
-    pizza: 'Capricciosa', face: '👵', who: 'Nonna Pina', types: [0, 1, 2, 3, 4, 5],
+    pizza: 'Capricciosa', mood: 'lenta', face: '👵', who: 'Nonna Pina', types: [0, 1, 2, 3, 4, 5],
     need: { 0: 15, 1: 15, 3: 15, 4: 12 }, moves: 27,
     hi: 'Come la faceva mio marito, buonanima.',
     win: 'Brava/o, come una volta!', lose: 'Ai miei tempi era più veloce.',
   },
   {
-    pizza: 'Marinara', face: '🧒', who: 'Luca (fuorisede)', types: [0, 2, 7, 4, 3],
+    pizza: 'Marinara', mood: 'napoletana', face: '🧒', who: 'Luca (fuorisede)', types: [0, 2, 7, 4, 3],
     need: { 0: 16, 7: 14, 2: 10 }, moves: 17, flour: 5,
     hi: 'Una marinara, che costa meno.',
     win: 'Con questa arrivo a fine mese!', lose: 'Mi faccio una pasta in bianco.',
   },
   {
-    pizza: 'Napoli', face: '👨', who: 'Don Ciro', types: [0, 1, 8, 4, 2],
+    pizza: 'Napoli', mood: 'napoletana', face: '👨', who: 'Don Ciro', types: [0, 1, 8, 4, 2],
     need: { 0: 14, 1: 12, 8: 14 }, moves: 16, dough: 3,
     hi: 'Acciughe. E non fare domande.',
     win: 'Bravo guaglione. Ti faccio sapere.', lose: 'Mi hai deluso. Assai.',
   },
   {
-    pizza: 'Parmigiana', face: '👩‍🦳', who: 'Zia Rosa', types: [0, 1, 2, 9, 3],
+    pizza: 'Parmigiana', mood: 'lenta', face: '👩‍🦳', who: 'Zia Rosa', types: [0, 1, 2, 9, 3],
     need: { 0: 14, 1: 14, 9: 16, 2: 8 }, moves: 16, flour: 6,
     hi: 'Le melanzane fritte, eh. Non grigliate.',
     win: 'Quasi come la mia. Quasi.', lose: 'Lo sapevo, dovevo farla io.',
   },
   {
-    pizza: 'Boscaiola', face: '🧙', who: 'Bruno il fungaiolo', types: [0, 1, 3, 11, 4, 10],
+    pizza: 'Boscaiola', mood: 'lenta', face: '🧙', who: 'Bruno il fungaiolo', types: [0, 1, 3, 11, 4, 10],
     need: { 1: 14, 3: 16, 11: 14 }, moves: 24, dough: 4,
     hi: 'I funghi li ho raccolti io. Trattali bene.',
     win: 'Profuma di bosco!', lose: 'Torno nel bosco, lì non si aspetta.',
   },
   {
-    pizza: 'Würstel e patatine', face: '👦', who: 'Tommy (8 anni)', types: [0, 1, 13, 14, 2, 4],
+    pizza: 'Würstel e patatine', mood: 'americana', face: '👦', who: 'Tommy (8 anni)', types: [0, 1, 13, 14, 2, 4],
     need: { 1: 12, 13: 16, 14: 16 }, moves: 24, flour: 4, dough: 2,
     hi: 'Con tante tante patatine!!!',
     win: 'È LA PIZZA PIÙ BUONA DEL MONDO!', lose: 'Mammaaa, ho fame!',
   },
   {
-    pizza: 'Carbonara', face: '🤵', who: 'Fabrizio (romano)', types: [1, 12, 11, 10, 3, 4],
+    pizza: 'Carbonara', mood: 'piccante', face: '🤵', who: 'Fabrizio (romano)', types: [1, 12, 11, 10, 3, 4],
     need: { 1: 12, 12: 16, 11: 16 }, moves: 22, flour: 5, dough: 3,
     hi: 'Senza panna. Guai a te.',
     win: 'Aò, mejo de mi nonna!', lose: 'Me ne vado a Trastevere.',
   },
   {
-    pizza: 'Friarielli e provola', face: '👷', who: 'Peppe', types: [0, 1, 15, 5, 7, 4],
+    pizza: 'Friarielli e provola', mood: 'napoletana', face: '👷', who: 'Peppe', types: [0, 1, 15, 5, 7, 4],
     need: { 1: 15, 15: 18, 5: 10 }, moves: 21, dough: 5,
     hi: 'Ho mezz’ora di pausa. Falla bella carica.',
     win: 'Mo sì che torno a faticare!', lose: 'La pausa è finita, mannaggia.',
   },
   {
-    pizza: 'Frutti di mare', face: '🧜', who: 'Marina', types: [0, 16, 7, 2, 8, 4],
+    pizza: 'Frutti di mare', mood: 'mare', face: '🧜', who: 'Marina', types: [0, 16, 7, 2, 8, 4],
     need: { 0: 14, 16: 16, 7: 12, 8: 10 }, moves: 20, flour: 6, dough: 2,
     hi: 'Fresca di giornata, mi raccomando.',
     win: 'Sa di mare. Meraviglia!', lose: 'Torno a nuoto, faccio prima.',
   },
   {
-    pizza: 'Quattro stagioni', face: '👮', who: 'Il maresciallo', types: [0, 1, 3, 4, 11, 9],
+    pizza: 'Quattro stagioni', mood: 'mare', face: '👮', who: 'Il maresciallo', types: [0, 1, 3, 4, 11, 9],
     need: { 0: 14, 1: 14, 3: 12, 4: 12, 11: 12 }, moves: 19, flour: 4, dough: 4,
     hi: 'Mi hanno chiamato per un ananas. Già che ci sono…',
     win: 'Nulla da verbalizzare. Ottima.', lose: 'Qui scatta la multa.',
   },
   {
-    pizza: 'Pizza del Nonno', face: '👴', who: 'Nonno Gennaro', types: [0, 1, 2, 5, 3, 4],
+    pizza: 'Pizza del Nonno', mood: 'napoletana', face: '👴', who: 'Nonno Gennaro', types: [0, 1, 2, 5, 3, 4],
     need: { 0: 18, 1: 18, 2: 12, 5: 12 }, moves: 20, flour: 5, dough: 5,
     hi: 'Fammi vedere cosa hai imparato.',
     win: 'Bravo. Mo sì che sei un pizzaiolo.', lose: 'Eh no. Si ricomincia dalla farina.',
@@ -131,7 +132,7 @@ export const LOGS = { e: '🪵', cost: 3, moves: 5 };
 // Ora di punta: niente ordine, solo punti finché dura il tempo.
 export const RUSH_SECONDS = 60;
 export const RUSH = {
-  pizza: 'Ora di punta', face: '⏱️', who: 'tutti', types: [0, 1, 2, 3, 4, 5], need: {}, moves: 1, rush: true,
+  pizza: 'Ora di punta', mood: 'piccante', face: '⏱️', who: 'tutti', types: [0, 1, 2, 3, 4, 5], need: {}, moves: 1, rush: true,
   hi: 'Sala piena! Più file fai, più punti prendi.',
 };
 

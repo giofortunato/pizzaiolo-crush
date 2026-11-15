@@ -1,8 +1,9 @@
 import { AppState } from 'react-native';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { TRACKS, DEFAULT_TRACK, MUSIC_VOLUME } from './music';
 
-// Effetti sonori e musica. I file .wav si rigenerano con scripts/make-sounds.py e scripts/make-music.py
+// Effetti sonori (scripts/make-sounds.py) e musica di sottofondo (brani in music.js).
 const SOURCES = {
   swap: require('../assets/sounds/swap.wav'),
   bad: require('../assets/sounds/bad.wav'),
@@ -17,14 +18,11 @@ const SOURCES = {
   lose: require('../assets/sounds/lose.wav'),
 };
 
-const MUSIC = require('../assets/sounds/music.wav');
-
 const MUTE_KEY = 'pizzaiolo-crush/muted/v1';
 const MUSIC_KEY = 'pizzaiolo-crush/music/v1';
 const players = {};
-let music = null;
 let muted = false;
-let musicOn = true;
+let musicOn = false; // spenta finché il giocatore non la accende dalla mappa
 let ready = false;
 
 // Da chiamare una volta all'avvio. Rispetta il tasto silenzioso dell'iPhone
@@ -32,7 +30,7 @@ let ready = false;
 export async function initSound() {
   try {
     muted = (await AsyncStorage.getItem(MUTE_KEY)) === '1';
-    musicOn = (await AsyncStorage.getItem(MUSIC_KEY)) !== '0';
+    musicOn = (await AsyncStorage.getItem(MUSIC_KEY)) === '1';
   } catch {}
   try {
     await setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' });
@@ -41,24 +39,55 @@ export async function initSound() {
     for (const k in SOURCES) players[k] = createAudioPlayer(SOURCES[k]);
     ready = true;
   } catch {}
-  try {
-    music = createAudioPlayer(MUSIC);
-    music.loop = true;
-    music.volume = 0.18; // sottofondo: gli effetti devono restare in primo piano
-    // La musica si ferma quando l'app va in secondo piano e riparte al ritorno.
-    AppState.addEventListener('change', syncMusic);
-  } catch {}
-  syncMusic();
+  // La musica si ferma quando l'app va in secondo piano e riparte al ritorno.
+  AppState.addEventListener('change', syncMusic);
   return { muted, music: musicOn };
 }
 
-// Fa suonare o tacere la musica secondo interruttori e stato dell'app.
-// Sul web il browser la fa partire solo dopo il primo tocco: per questo si richiama anche da lì.
-export function syncMusic() {
-  if (!music) return;
+// ---------- musica ----------
+// La musica parte quando si inforna (playMusic con l'umore dell'ordine) e si ferma a pizza finita (stopMusic).
+// Sulla mappa non suona. Ogni cambio passa da una dissolvenza breve.
+let mood = null;        // umore richiesto, o null se deve tacere
+let player = null;      // brano in corso
+let playerSrc = null;
+const fades = new Map();
+const FADE_MS = 400, STEPS = 10;
+
+function ramp(p, to, done) {
+  clearInterval(fades.get(p));
+  let n = 0;
+  const from = p.volume, timer = setInterval(() => {
+    n++;
+    try { p.volume = from + (to - from) * (n / STEPS); } catch {}
+    if (n >= STEPS) { clearInterval(timer); fades.delete(p); if (done) done(); }
+  }, FADE_MS / STEPS);
+  fades.set(p, timer);
+}
+
+function fadeOutAndDrop(p) {
+  ramp(p, 0, () => { try { p.pause(); p.remove(); } catch {} });
+}
+
+export function playMusic(which) { mood = which || DEFAULT_TRACK; syncMusic(); }
+export function stopMusic() { mood = null; syncMusic(); }
+
+function syncMusic() {
+  const src = mood ? TRACKS[mood] || TRACKS[DEFAULT_TRACK] : null;
+  const want = !!src && musicOn && !muted && AppState.currentState === 'active';
   try {
-    if (musicOn && !muted && AppState.currentState === 'active') music.play();
-    else music.pause();
+    if (!want) {
+      if (player) ramp(player, 0, () => { try { player && player.pause(); } catch {} });
+      return;
+    }
+    if (player && playerSrc !== src) { fadeOutAndDrop(player); player = null; }
+    if (!player) {
+      player = createAudioPlayer(src);
+      player.loop = true;
+      player.volume = 0;
+      playerSrc = src;
+    }
+    player.play();
+    ramp(player, MUSIC_VOLUME);
   } catch {}
 }
 

@@ -13,7 +13,7 @@ import Board, { INSET_X, INSET_Y, cellFor } from './src/Board';
 import Pizza from './src/Pizza';
 import LevelMap from './src/Map';
 import { loadProgress, saveProgress } from './src/save';
-import { initSound, setMuted, setMusic, syncMusic } from './src/sound';
+import { initSound, setMuted, setMusic } from './src/sound';
 import { initHaptics, setHaptics } from './src/haptic';
 import { motion } from './src/motion';
 import { dailyStreak } from './src/progress';
@@ -165,7 +165,7 @@ function Root() {
   const [ready, setReady] = useState(false);
   const [screen, setScreen] = useState('map');
   const [muted, setMutedState] = useState(false);
-  const [music, setMusicState] = useState(true);
+  const [music, setMusicState] = useState(false);
   const [haptics, setHapticsState] = useState(true);
   const [fontsLoaded, fontError] = useFonts({ LilitaOne_400Regular, Nunito_600SemiBold, Nunito_600SemiBold_Italic, Nunito_800ExtraBold });
   const { width, height } = useWindowDimensions();
@@ -199,7 +199,6 @@ function Root() {
   // Dalla mappa: un ordine, la pizza del giorno o l'ora di punta.
   // Se stavi già giocando proprio quello lo riprendi, altrimenti parte da capo.
   const pick = (mode, i) => {
-    syncMusic(); // sul web la musica può partire solo dopo un tocco
     if (mode === 'rush') game.startRush();
     else if (mode === 'daily') { if (!game.inProgress('daily')) game.startDaily(); }
     else if (!(game.inProgress('level') && game.lvlIdx === i)) game.startLevel(i);

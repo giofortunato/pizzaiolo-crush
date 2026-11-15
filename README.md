@@ -38,7 +38,7 @@ registrarli in sistemi di riconoscimento audio (Content ID).
 |---|---|---|
 | napoletana | [Italy - Espresso in the Piazza](https://ende.app/en/song/13956-italy-espresso-in-the-piazza) | `assets/sounds/music/napoletana.m4a` |
 | piccante | [Italy - Kitchen Tarantella](https://ende.app/en/song/13958-italy-kitchen-tarantella) | `assets/sounds/music/piccante.m4a` |
-| americana | previsto: [Ultimate Tropical Vol. 13](https://ende.app/en/song/13408-ultimate-tropical-vol-13) | — |
+| americana | per ora *Kitchen Tarantella*; previsto: [Ultimate Tropical Vol. 13](https://ende.app/en/song/13408-ultimate-tropical-vol-13) | `piccante.m4a` |
 | lenta | previsto: [Italy - Venice by Gondola](https://ende.app/en/song/13962-italy-venice-by-gondola) | — |
 | mare | previsto: [Italy - Last Waltz in Palermo](https://ende.app/en/song/13964-italy-last-waltz-in-palermo) | — |
 

@@ -7,7 +7,7 @@
 export const TRACKS = {
   napoletana: require('../assets/sounds/music/napoletana.m4a'), // Italy - Espresso in the Piazza
   piccante: require('../assets/sounds/music/piccante.m4a'),     // Italy - Kitchen Tarantella
-  americana: null,  // previsto: Ultimate Tropical Vol. 13
+  americana: require('../assets/sounds/music/piccante.m4a'), // stessa tarantella buffa; previsto: Ultimate Tropical Vol. 13
   lenta: null,      // previsto: Italy - Venice by Gondola
   mare: null,       // previsto: Italy - Last Waltz in Palermo
 };

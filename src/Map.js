@@ -21,7 +21,8 @@ function Toggle({ on, emoji, off, label, onPress }) {
 
 // La mappa: impostazioni, pizza del giorno, ora di punta e gli ordini.
 // Quelli serviti mostrano le stelle (si possono rifare per migliorarle), il prossimo è in evidenza, gli altri chiusi.
-export default function LevelMap({ game, onPick, settings }) {
+export default function LevelMap({ game, onPick, settings, cols = 3 }) {
+  const nodeW = cols === 3 ? '31.5%' : `${(100 - (cols - 1) * 1.6) / cols}%`;
   const p = game.progress;
   const [confirm, setConfirm] = useState(false);
   // Si vedono tutti gli ordini del giro in cui sei; finito un giro compare il successivo, più difficile.
@@ -87,7 +88,7 @@ export default function LevelMap({ game, onPick, settings }) {
             <Pressable
               key={i} disabled={!open} onPress={() => onPick('level', i)}
               accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: !open }}
-              style={({ pressed }) => [styles.node, next && styles.nodeNext, !open && styles.nodeLocked, pressed && styles.nodePressed]}
+              style={({ pressed }) => [styles.node, { width: nodeW }, next && styles.nodeNext, !open && styles.nodeLocked, pressed && styles.nodePressed]}
             >
               <Text style={styles.no}>{i + 1}</Text>
               <Text style={styles.face}>{open ? lvl.face : '🔒'}</Text>

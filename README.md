@@ -43,15 +43,14 @@ sostituiti.
 |---|---|---|---|
 | napoletana | [Italy - Espresso in the Piazza](https://ende.app/en/song/13956-italy-espresso-in-the-piazza) | Sascha Ende, CC BY 4.0 | `napoletana.m4a` |
 | piccante | [Italy - Kitchen Tarantella](https://ende.app/en/song/13958-italy-kitchen-tarantella) | Sascha Ende, CC BY 4.0 | `piccante.m4a` |
-| americana | Pizzaiolo Crush - americana | Suno, piano gratuito | `americana.m4a` |
-| lenta | Pizzaiolo Crush - lenta | Suno, piano gratuito | `lenta.m4a` |
-| mare | Pizzaiolo Crush - mare | Suno, piano gratuito | `mare.m4a` |
+| americana | Pizzaiolo Crush - allegra | Suno, piano gratuito | `americana.m4a` |
+| lenta | Pizzaiolo Crush - valzer (versione 1) | Suno, piano gratuito | `lenta.m4a` |
+| mare | Pizzaiolo Crush - valzer (versione 2) | Suno, piano gratuito | `mare.m4a` |
 
-Descrizioni usate su Suno (modalità Advanced, testo vuoto = strumentale):
+Descrizioni usate su Suno (modalità Advanced, testo vuoto = strumentale), scelte per legare con i due brani di Sascha Ende:
 
-- americana: `playful tropical ukulele and steel drums, cheerful cartoon cooking game background music, bouncy, light percussion, happy, instrumental, seamless loop`
-- lenta: `gentle Italian trattoria background music, soft accordion and nylon guitar, slow relaxed tempo, warm and cozy, calm, instrumental, seamless loop`
-- mare: `slow Italian waltz 3/4, mandolin tremolo and accordion, Mediterranean seaside, romantic and airy, light strings, instrumental, seamless loop`
+- allegra: `Italian folk instrumental, playful accordion and mandolin, acoustic guitar, upright bass, bouncy oom-pah tuba, medium tempo, cheerful and humorous, Italian restaurant, acoustic, no vocals`
+- valzer (le due versioni della stessa richiesta): `Italian folk instrumental, accordion lead melody, Neapolitan mandolin, acoustic guitar, upright bass, slow gentle 3/4 waltz, warm trattoria atmosphere, sunny and nostalgic, acoustic, no vocals`
 
 I file sono in `assets/sounds/music/`, compressi con `afconvert -f m4af -d aac -b 96000 brano.mp3 assets/sounds/music/<umore>.m4a`
 (da Suno scaricare in MP3: l'M4A di Suno è in Opus e afconvert non lo legge).

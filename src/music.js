@@ -7,9 +7,9 @@
 export const TRACKS = {
   napoletana: require('../assets/sounds/music/napoletana.m4a'), // Italy - Espresso in the Piazza (Sascha Ende)
   piccante: require('../assets/sounds/music/piccante.m4a'),     // Italy - Kitchen Tarantella (Sascha Ende)
-  americana: require('../assets/sounds/music/americana.m4a'),   // generato con Suno: ukulele e steel drum
-  lenta: require('../assets/sounds/music/lenta.m4a'),           // generato con Suno: fisarmonica e chitarra
-  mare: require('../assets/sounds/music/mare.m4a'),             // generato con Suno: valzer con mandolino
+  americana: require('../assets/sounds/music/americana.m4a'),   // generato con Suno: folk italiano allegro (fisarmonica, mandolino, tuba)
+  lenta: require('../assets/sounds/music/lenta.m4a'),           // generato con Suno: valzer italiano lento, versione 1
+  mare: require('../assets/sounds/music/mare.m4a'),             // generato con Suno: valzer italiano lento, versione 2
 };
 export const DEFAULT_TRACK = 'napoletana';
 // Volume della musica rispetto agli effetti (0-1). I brani sono già masterizzati: 0.35 li tiene sotto ai pop.

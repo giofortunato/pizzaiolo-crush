@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { View, Text, Animated, PanResponder, StyleSheet } from 'react-native';
 import { N, T, BOMB, DOUGH } from './data';
 import { C, F } from './theme';
+import { motion } from './motion';
 
 export const PAD = 6;
 
@@ -57,6 +58,36 @@ function Effect({ e, cell }) {
   );
 }
 
+// Prima partita: una mano che va avanti e indietro tra le due celle da scambiare.
+function Hand({ guide, cell }) {
+  const v = useState(() => new Animated.Value(0))[0];
+  useEffect(() => {
+    if (motion.reduce) return;
+    const loop = Animated.loop(Animated.sequence([
+      Animated.delay(250),
+      Animated.timing(v, { toValue: 1, duration: 650, useNativeDriver: true }),
+      Animated.delay(350),
+      Animated.timing(v, { toValue: 0, duration: 1, useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [v]);
+  const [[r1, c1], [r2, c2]] = guide;
+  const at = (r, c) => ({ x: PAD + c * cell + cell * 0.28, y: PAD + r * cell + cell * 0.42 });
+  const a = at(r1, c1), b = at(r2, c2);
+  return (
+    <Animated.Text
+      pointerEvents="none"
+      style={[styles.hand, { fontSize: cell * 0.72, transform: [
+        { translateX: v.interpolate({ inputRange: [0, 1], outputRange: [a.x, b.x] }) },
+        { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [a.y, b.y] }) },
+      ] }]}
+    >
+      👆
+    </Animated.Text>
+  );
+}
+
 const BORDER = 6, EDGE_TOP = 2, EDGE_BOTTOM = 5;
 
 // Per chi disegna sopra la scacchiera: dove inizia la griglia dentro al tagliere e quanto è grande una cella.
@@ -105,6 +136,7 @@ export default function Board({ game, width }) {
         <Tile key={t.id} tile={t} t={t.t} sp={t.sp} hp={t.hp} lock={t.lock} cell={cell} selected={sel === t} />
       ))}
       {game.effects.map((e) => <Effect key={e.id} e={e} cell={cell} />)}
+      {game.guide && <Hand guide={game.guide} cell={cell} />}
     </View>
     </View>
   );
@@ -123,6 +155,7 @@ const styles = StyleSheet.create({
   doughHalf: { backgroundColor: '#c99a5b', borderWidth: 2, borderTopWidth: 2, borderBottomWidth: 2, borderColor: '#7a4a22', borderStyle: 'dashed' },
   // Farina sopra un ingrediente: velo bianco con bordo, l'ingrediente si intravede sotto.
   flour: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,.62)', borderWidth: 2, borderColor: '#fff', borderStyle: 'dashed' },
+  hand: { position: 'absolute', left: 0, top: 0, includeFontPadding: false, textShadowColor: 'rgba(0,0,0,.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 },
   emoji: { includeFontPadding: false, textAlign: 'center', userSelect: 'none' },
   stripe: { position: 'absolute', backgroundColor: C.tomato, borderRadius: 3, borderWidth: 2, borderColor: C.saffron, borderStyle: 'dashed' },
   beam: { position: 'absolute', backgroundColor: '#ffb347', borderRadius: 8, shadowColor: '#ff7a3d', shadowOpacity: 1, shadowRadius: 10 },

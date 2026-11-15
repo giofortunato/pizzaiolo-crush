@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
-import { View, Text, Pressable, Share, StyleSheet, Animated, Easing, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, Share, StyleSheet, Animated, Easing, AccessibilityInfo, useWindowDimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
@@ -7,13 +7,16 @@ import { LilitaOne_400Regular } from '@expo-google-fonts/lilita-one';
 import { Nunito_600SemiBold, Nunito_600SemiBold_Italic, Nunito_800ExtraBold } from '@expo-google-fonts/nunito';
 import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
 import { Game } from './src/engine';
-import { T } from './src/data';
+import { T, TOOLS, LOGS, RUSH_SECONDS } from './src/data';
 import { C, F } from './src/theme';
 import Board, { INSET_X, INSET_Y, cellFor } from './src/Board';
 import Pizza from './src/Pizza';
 import LevelMap from './src/Map';
 import { loadProgress, saveProgress } from './src/save';
-import { initSound, setMuted } from './src/sound';
+import { initSound, setMuted, setMusic, syncMusic } from './src/sound';
+import { initHaptics, setHaptics } from './src/haptic';
+import { motion } from './src/motion';
+import { dailyStreak } from './src/progress';
 
 export default function App() {
   return (
@@ -90,7 +93,7 @@ function useBump(value, big, enabled = true) {
   const first = useRef(true);
   useEffect(() => {
     if (first.current) { first.current = false; return; }
-    if (!enabled) return;
+    if (!enabled || motion.reduce) return;
     sc.setValue(big ? 1.35 : 1.18);
     Animated.spring(sc, { toValue: 1, speed: 18, bounciness: 12, useNativeDriver: true }).start();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deve scattare solo quando cambia `value`
@@ -98,12 +101,12 @@ function useBump(value, big, enabled = true) {
   return sc;
 }
 
-// Contamosse: salta a ogni mossa, pulsa quando ne restano poche.
-function Moves({ moves, low }) {
+// Contamosse (o secondi, nell'ora di punta): salta a ogni cambio, pulsa quando ne restano pochi.
+function Moves({ moves, low, label = 'mosse' }) {
   const bump = useBump(moves);
   const pulse = useState(() => new Animated.Value(1))[0];
   useEffect(() => {
-    if (!low) { pulse.setValue(1); return; }
+    if (!low || motion.reduce) { pulse.setValue(1); return; }
     const loop = Animated.loop(Animated.sequence([
       Animated.timing(pulse, { toValue: 1.08, duration: 420, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
       Animated.timing(pulse, { toValue: 1, duration: 420, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
@@ -112,17 +115,23 @@ function Moves({ moves, low }) {
     return () => loop.stop();
   }, [low, pulse]);
   return (
-    <Animated.View style={[styles.moves, low && styles.movesLow, { transform: [{ scale: Animated.multiply(bump, pulse) }] }]}>
+    <Animated.View
+      accessible accessibilityLabel={`${moves} ${label} rimaste`}
+      style={[styles.moves, low && styles.movesLow, { transform: [{ scale: Animated.multiply(bump, pulse) }] }]}
+    >
       <Text style={styles.movesN}>{moves}</Text>
-      <Text style={styles.movesL}>mosse</Text>
+      <Text style={styles.movesL}>{label}</Text>
     </Animated.View>
   );
 }
 
-function Goal({ emoji, left }) {
+function Goal({ emoji, name, left }) {
   const sc = useBump(left, left === 0);
   return (
-    <Animated.View style={[styles.goal, !left && styles.goalDone, { transform: [{ scale: sc }] }]}>
+    <Animated.View
+      accessible accessibilityLabel={left ? `${name}: ne mancano ${left}` : `${name}: fatto`}
+      style={[styles.goal, !left && styles.goalDone, { transform: [{ scale: sc }] }]}
+    >
       <Text style={styles.goalE}>{emoji}</Text>
       <Text style={styles.goalN}>{left || '✓'}</Text>
     </Animated.View>
@@ -156,41 +165,56 @@ function Root() {
   const [ready, setReady] = useState(false);
   const [screen, setScreen] = useState('map');
   const [muted, setMutedState] = useState(false);
+  const [music, setMusicState] = useState(true);
+  const [haptics, setHapticsState] = useState(true);
   const [fontsLoaded, fontError] = useFonts({ LilitaOne_400Regular, Nunito_600SemiBold, Nunito_600SemiBold_Italic, Nunito_800ExtraBold });
   const { width, height } = useWindowDimensions();
 
   // All'avvio: se c'era un ordine lasciato a metà si riparte da lì, altrimenti dalla mappa.
   useEffect(() => {
     let alive = true;
-    initSound().then((m) => { if (alive) setMutedState(m); });
+    initSound().then((snd) => { if (alive) { setMutedState(snd.muted); setMusicState(snd.music); } });
+    initHaptics().then((on) => { if (alive) setHapticsState(on); });
+    // Rispetta "Riduci movimento" delle impostazioni di accessibilità.
+    AccessibilityInfo.isReduceMotionEnabled().then((on) => { motion.reduce = !!on; }).catch(() => {});
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', (on) => { motion.reduce = !!on; });
     loadProgress().then((saved) => {
       if (!alive) return;
       if (game.load(saved)) setScreen('game');
       setReady(true);
     });
-    return () => { alive = false; };
+    return () => { alive = false; if (sub && sub.remove) sub.remove(); };
   }, [game]);
 
   // Se i font non arrivano (es. senza rete sul web) si parte lo stesso con quelli di sistema.
   if (!ready || (!fontsLoaded && !fontError)) return <View style={styles.root} />;
 
-  // Toccando l'ordine che stavi già giocando lo riprendi, altrimenti parte da capo.
-  const pick = (i) => {
-    if (!(game.inProgress() && game.lvlIdx === i)) game.startLevel(i);
+  const settings = {
+    muted, music, haptics,
+    toggleMute: () => { setMuted(!muted); setMutedState(!muted); },
+    toggleMusic: () => { setMusic(!music); setMusicState(!music); },
+    toggleHaptics: () => { setHaptics(!haptics); setHapticsState(!haptics); },
+  };
+
+  // Dalla mappa: un ordine, la pizza del giorno o l'ora di punta.
+  // Se stavi già giocando proprio quello lo riprendi, altrimenti parte da capo.
+  const pick = (mode, i) => {
+    syncMusic(); // sul web la musica può partire solo dopo un tocco
+    if (mode === 'rush') game.startRush();
+    else if (mode === 'daily') { if (!game.inProgress('daily')) game.startDaily(); }
+    else if (!(game.inProgress('level') && game.lvlIdx === i)) game.startLevel(i);
     setScreen('game');
   };
+  const toMap = () => { game.leave(); setScreen('map'); };
   const playing = screen === 'game' && game.lvl;
 
   return (
     <SafeAreaView style={styles.root}>
       <OvenGlow width={width} height={height} />
       {playing ? (
-        <GameScreen
-          game={game} width={width} height={height} onMap={() => setScreen('map')}
-          muted={muted} onMute={() => { setMuted(!muted); setMutedState(!muted); }}
-        />
+        <GameScreen game={game} width={width} height={height} onMap={toMap} muted={muted} onMute={settings.toggleMute} />
       ) : (
-        <View style={{ flex: 1, width: Math.min(width, 464) }}><LevelMap game={game} onPick={pick} /></View>
+        <View style={{ flex: 1, width: Math.min(width, 464) }}><LevelMap game={game} onPick={pick} settings={settings} /></View>
       )}
     </SafeAreaView>
   );
@@ -209,6 +233,8 @@ function GameScreen({ game, width, height, onMap, muted, onMute }) {
   const boardW = Math.max(240, Math.min(width - 24, 440, height - 340));
   const lvl = game.lvl;
   const talk = game.talk;
+  const rush = game.mode === 'rush';
+  const coins = game.progress.coins;
 
   return (
     <>
@@ -238,30 +264,61 @@ function GameScreen({ game, width, height, onMap, muted, onMute }) {
         <View style={styles.order}>
           <Face face={(talk && talk.face) || lvl.face} talking={talk ? talk.text : ''} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.orderNo}>Ordine {game.lvlIdx + 1}</Text>
-            <Text style={styles.orderTitle} numberOfLines={1}>{lvl.pizza} per {lvl.who}</Text>
+            <Text style={styles.orderNo}>{rush ? 'Ora di punta' : game.mode === 'daily' ? 'Pizza del giorno' : `Ordine ${game.lvlIdx + 1}`}</Text>
+            <Text style={styles.orderTitle} numberOfLines={1}>{rush ? 'Sala piena!' : `${lvl.pizza} per ${lvl.who}`}</Text>
             <Text style={[styles.orderSay, talk && talk.hot && styles.hot]} numberOfLines={2}>{talk ? talk.text : lvl.hi}</Text>
           </View>
-          <Moves moves={game.moves} low={game.moves <= 3 && !game.over} />
+          {rush
+            ? <Moves moves={game.timeLeft} label="secondi" low={game.timeLeft <= 10 && !game.over} />
+            : <Moves moves={game.moves} low={game.moves <= 3 && !game.over} />}
         </View>
 
         <View ref={boardRef} onLayout={onBoardLayout} style={{ alignSelf: 'center' }}>
           <Board game={game} width={boardW} />
         </View>
 
-        <View style={styles.bottom}>
-          <Animated.View ref={pizzaRef} onLayout={onPizzaLayout} style={{ transform: [{ scale: pizzaScale }] }}>
-            <Pizza size={104} lvl={lvl} got={game.got} spots={game.spots} />
-          </Animated.View>
-          <View style={{ flex: 1, gap: 8 }}>
-            <View style={styles.goals}>
-              {Object.keys(lvl.need).map((k) => (
-                <Goal key={k} emoji={T[k].e} left={Math.max(0, lvl.need[k] - (game.got[k] || 0))} />
-              ))}
-            </View>
-            <Text style={styles.tip}>Trascina un ingrediente su uno vicino, oppure toccane due.</Text>
+        {rush ? (
+          <View style={styles.rushBox}>
+            <Text style={styles.rushT}>Record: <Text style={styles.rushN}>{game.progress.rush}</Text> punti</Text>
+            <Text style={styles.tip}>Niente ordine e niente mosse contate: fai più file che puoi prima che scada il tempo.</Text>
           </View>
-        </View>
+        ) : (
+          <View style={styles.bottom}>
+            <Animated.View ref={pizzaRef} onLayout={onPizzaLayout} style={{ transform: [{ scale: pizzaScale }] }}>
+              <Pizza size={104} lvl={lvl} got={game.got} spots={game.spots} />
+            </Animated.View>
+            <View style={{ flex: 1, gap: 8 }}>
+              <View style={styles.goals}>
+                {Object.keys(lvl.need).map((k) => (
+                  <Goal key={k} emoji={T[k].e} name={T[k].n} left={Math.max(0, lvl.need[k] - (game.got[k] || 0))} />
+                ))}
+              </View>
+              {/* Attrezzi: si pagano in gettoni e non consumano mosse. */}
+              <View style={styles.tools}>
+                <View style={styles.coins} accessible accessibilityLabel={`${coins} gettoni`}>
+                  <Text style={styles.coinsT}>🪙 {coins}</Text>
+                </View>
+                {Object.keys(TOOLS).map((k) => {
+                  const tool = TOOLS[k], on = game.tool === k, poor = coins < tool.cost;
+                  return (
+                    <Pressable
+                      key={k} onPress={() => game.selectTool(k)} hitSlop={4}
+                      accessibilityRole="button" accessibilityState={{ selected: on, disabled: poor }}
+                      accessibilityLabel={`${tool.n}, costa ${tool.cost} gettoni. ${tool.tip}`}
+                      style={[styles.tool, on && styles.toolOn, poor && styles.toolPoor]}
+                    >
+                      <Text style={styles.toolE}>{tool.e}</Text>
+                      <Text style={[styles.toolN, on && { color: C.wood }]}>{tool.cost}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Text style={styles.tip}>
+                {game.tool ? TOOLS[game.tool].tip : 'Trascina un ingrediente su uno vicino, oppure toccane due.'}
+              </Text>
+            </View>
+          </View>
+        )}
 
         <FlyLayer
           effects={game.effects} layer={layerBox} pizza={pizzaBox} onLand={onLand}
@@ -284,11 +341,38 @@ function GameModal({ game, onMap }) {
     </Pressable>
   );
 
-  if (modal.type === 'start') {
+  const daily = game.mode === 'daily';
+  if (modal.type === 'start' && game.mode === 'rush') {
     body = (
       <>
         <Text style={styles.big}>{lvl.face}</Text>
-        <Text style={styles.h2}>{lvl.who} ordina una {lvl.pizza}</Text>
+        <Text style={styles.h2}>Ora di punta</Text>
+        <Text style={styles.quote}>“{lvl.hi}”</Text>
+        <Text style={styles.p}>Hai <Text style={styles.strong}>{RUSH_SECONDS} secondi</Text>. Record: <Text style={styles.strong}>{game.progress.rush}</Text> punti.</Text>
+        <View style={styles.btns}><Btn label="Via!" onPress={() => game.begin()} /></View>
+        {toMap}
+      </>
+    );
+  } else if (modal.type === 'rush') {
+    body = (
+      <>
+        <Text style={styles.big}>⏱️</Text>
+        <Text style={styles.h2}>Tempo scaduto!</Text>
+        <Text style={styles.p}><Text style={styles.strong}>{game.score} punti</Text>{modal.record ? '. Nuovo record!' : `. Record: ${game.progress.rush}.`}</Text>
+        <View style={styles.btns}>
+          <Btn alt label={shared ? 'Condiviso ✓' : 'Condividi'} onPress={async () => {
+            try { await Share.share({ message: game.shareText() }); setShared(true); } catch {}
+          }} />
+          <Btn label="Ancora!" onPress={() => game.retry()} />
+        </View>
+        {toMap}
+      </>
+    );
+  } else if (modal.type === 'start') {
+    body = (
+      <>
+        <Text style={styles.big}>{lvl.face}</Text>
+        <Text style={styles.h2}>{daily ? `Pizza del giorno: ${lvl.pizza}` : `${lvl.who} ordina una ${lvl.pizza}`}</Text>
         <Text style={styles.quote}>“{lvl.hi}”</Text>
         <View style={styles.list}>
           {Object.keys(lvl.need).map((k) => (
@@ -296,11 +380,18 @@ function GameModal({ game, onMap }) {
           ))}
         </View>
         <Text style={styles.p}>Hai <Text style={styles.strong}>{lvl.moves} mosse</Text>.</Text>
-        {game.lvlIdx === 0 && (
+        {daily && <Text style={styles.small}>Oggi è uguale per tutti. Servila per tenere viva la serie: {dailyStreak(game.progress, game.day)} giorni.</Text>}
+        {game.mode === 'level' && game.lvlIdx === 0 && (
           <View style={styles.help}>
             <Text style={styles.helpT}>👉 Allinea 3 ingredienti uguali per metterli sulla pizza.</Text>
             <Text style={styles.helpT}>🔥 <Text style={styles.strong}>4 in fila</Text> accende il Forno: brucia una riga o colonna.</Text>
             <Text style={styles.helpT}>🍕 <Text style={styles.strong}>5 in fila o a L/T</Text> crea la Pala: scambiala con un ingrediente per prenderli tutti.</Text>
+          </View>
+        )}
+        {game.mode === 'level' && game.lvlIdx === 1 && (
+          <View style={styles.help}>
+            <Text style={styles.helpT}>🪙 Ogni stella nuova vale un <Text style={styles.strong}>gettone</Text>. Sotto la scacchiera li spendi in attrezzi: 🔪 toglie un ingrediente, 🍴 una riga intera.</Text>
+            <Text style={styles.helpT}>💥 Scambia tra loro <Text style={styles.strong}>due speciali</Text> (Forni o Pale) per un effetto doppio.</Text>
           </View>
         )}
         {(lvl.flour || lvl.dough) ? (
@@ -344,13 +435,18 @@ function GameModal({ game, onMap }) {
         </View>
         <Text style={styles.quote}>“{lvl.win}”</Text>
         <Text style={styles.small}>Mosse avanzate: {game.moves} (+{modal.bonus} punti). Totale {game.score} punti.{modal.record ? ' Nuovo record!' : ''}</Text>
+        {(modal.gained > 0 || modal.streak > 0) && (
+          <Text style={styles.reward}>
+            {modal.gained > 0 ? `+${modal.gained} 🪙` : ''}{modal.gained > 0 && modal.streak > 0 ? '   ' : ''}{modal.streak > 0 ? `📅 Serie: ${modal.streak} ${modal.streak === 1 ? 'giorno' : 'giorni'}` : ''}
+          </Text>
+        )}
         <View style={styles.btns}>
           <Btn alt label={shared ? 'Condiviso ✓' : 'Condividi'} onPress={async () => {
             try { await Share.share({ message: game.shareText() }); setShared(true); } catch {}
           }} />
-          <Btn label="Prossimo ordine" onPress={() => game.next()} />
+          {daily ? <Btn label="Alla mappa" onPress={onMap} /> : <Btn label="Prossimo ordine" onPress={() => game.next()} />}
         </View>
-        {toMap}
+        {!daily && toMap}
       </>
     );
   } else {
@@ -364,7 +460,11 @@ function GameModal({ game, onMap }) {
             <View key={k} style={styles.chip}><Text style={styles.chipE}>{T[k].e}</Text><Text style={styles.chipN}>mancano {lvl.need[k] - (game.got[k] || 0)}</Text></View>
           ))}
         </View>
-        <View style={styles.btns}><Btn label="Riprova" onPress={() => game.retry()} /></View>
+        <View style={styles.btns}>
+          {game.canAddLogs() && <Btn alt label={`${LOGS.e} +${LOGS.moves} mosse (${LOGS.cost} 🪙)`} onPress={() => game.addLogs()} />}
+          <Btn label="Riprova" onPress={() => game.retry()} />
+        </View>
+        {game.canAddLogs() && <Text style={styles.small}>Hai {game.progress.coins} 🪙. Con un po’ di legna il forno regge ancora {LOGS.moves} mosse.</Text>}
         {toMap}
       </>
     );
@@ -421,6 +521,19 @@ const styles = StyleSheet.create({
   goalDone: { backgroundColor: C.basil },
   goalE: { fontSize: 16, includeFontPadding: false },
   goalN: { color: C.cream, fontFamily: F.display, fontSize: 16, includeFontPadding: false },
+  // Attrezzi del pizzaiolo e gettoni.
+  tools: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  coins: { backgroundColor: 'rgba(0,0,0,.35)', borderRadius: 12, paddingHorizontal: 9, paddingVertical: 5 },
+  coinsT: { color: C.saffron, fontFamily: F.display, fontSize: 15, includeFontPadding: false },
+  tool: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.woodLight, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, borderBottomWidth: 3, borderBottomColor: '#4e2f1a' },
+  toolOn: { backgroundColor: C.saffron, borderBottomColor: C.saffronDark },
+  toolPoor: { opacity: 0.45 },
+  toolE: { fontSize: 17, includeFontPadding: false },
+  toolN: { color: C.cream, fontFamily: F.display, fontSize: 14, includeFontPadding: false },
+  rushBox: { gap: 6, paddingHorizontal: 4 },
+  rushT: { color: C.cream, fontFamily: F.body, fontSize: 16 },
+  rushN: { color: C.saffron, fontFamily: F.display, fontSize: 20 },
+  reward: { color: C.basilDark, fontFamily: F.display, fontSize: 17, textAlign: 'center', marginTop: 6 },
   tip: { color: C.cream, fontFamily: F.body, opacity: 0.6, fontSize: 12, lineHeight: 16 },
 
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(20,10,5,.8)', alignItems: 'center', justifyContent: 'center', padding: 18 },

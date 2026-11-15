@@ -3,10 +3,10 @@
 //   "a caso"  = sceglie una mossa valida qualsiasi (un giocatore distratto)
 //   "attento" = sceglie la mossa che raccoglie più ingredienti richiesti (guarda una mossa avanti)
 import { pathToFileURL } from 'node:url';
-import { N, BOMB, LEVELS } from '../src/data.js';
+import { LEVELS } from '../src/data.js';
 import {
   keyOf, findMatches, findMoves, swapCells, planSpecials, clearStep, collapse,
-  newBoard, reshuffle, ofType, starsFor, plainCell,
+  newBoard, reshuffle, comboClear, starsFor, plainCell,
 } from '../src/rules.js';
 
 const games = +process.argv[2] || 300;
@@ -29,16 +29,8 @@ function play(grid, lvl, got, [[r1, c1], [r2, c2]]) {
   const a = grid[r1][c1], b = grid[r2][c2];
   swapCells(grid, r1, c1, r2, c2);
   let swapped = [a, b];
-  if (a.sp === 'bomb' || b.sp === 'bomb') {
-    const bomb = a.sp === 'bomb' ? a : b, other = bomb === a ? b : a;
-    let keys;
-    if (other.sp === 'bomb') { keys = []; for (let i = 0; i < N * N; i++) keys.push(i); other.sp = null; }
-    else keys = ofType(grid, other.t);
-    bomb.sp = null;
-    keys.push(...ofType(grid, BOMB).filter((k) => grid[Math.floor(k / N)][k % N] === bomb));
-    step(new Set(keys), new Map());
-    swapped = null;
-  }
+  const combo = comboClear(grid, a, b, rnd);
+  if (combo) { step(new Set(combo.keys), new Map()); swapped = null; }
   for (;;) {
     const groups = findMatches(grid);
     if (!groups.length) break;

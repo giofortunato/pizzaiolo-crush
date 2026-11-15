@@ -120,6 +120,21 @@ export const LEVELS = [
   },
 ];
 
+// Attrezzi del pizzaiolo: si pagano in gettoni (uno per ogni stella nuova) e non consumano mosse.
+export const TOOLS = {
+  knife: { e: '🔪', n: 'Coltello', cost: 1, tip: 'Tocca un ingrediente per toglierlo.' },
+  fork: { e: '🍴', n: 'Forchetta', cost: 2, tip: 'Tocca una riga per infilzarla tutta.' },
+};
+// Legna nel forno: 5 mosse in più quando il cliente sta per andarsene.
+export const LOGS = { e: '🪵', cost: 3, moves: 5 };
+
+// Ora di punta: niente ordine, solo punti finché dura il tempo.
+export const RUSH_SECONDS = 60;
+export const RUSH = {
+  pizza: 'Ora di punta', face: '⏱️', who: 'tutti', types: [0, 1, 2, 3, 4, 5], need: {}, moves: 1, rush: true,
+  hi: 'Sala piena! Più file fai, più punti prendi.',
+};
+
 export const NONNO = [
   "Mamma mia! L'ananas sulla pizza?!",
   'Ma che state facendo?! 😱',

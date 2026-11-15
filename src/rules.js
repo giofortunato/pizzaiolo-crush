@@ -64,6 +64,8 @@ export function findMoves(grid, onlyFirst = false) {
       if (r2 >= N || c2 >= N) continue;
       const b = grid[r2][c2];
       if (!canMove(b) || b.sp === 'bomb') continue; // la Pala è già contata dalla sua cella
+      // due Forni vicini si possono sempre scambiare: fanno la croce
+      if (a.sp && b.sp) { out.push([[r, c], [r2, c2]]); if (onlyFirst) return out; continue; }
       swapCells(grid, r, c, r2, c2);
       const ok = findMatches(grid).length > 0;
       swapCells(grid, r, c, r2, c2);
@@ -89,6 +91,41 @@ export function planSpecials(groups, isSwapped = () => false) {
     create.set(keyOf(pos[0], pos[1]), g.cells.length >= 5 ? 'bomb' : g.h ? 'row' : 'col');
   }
   return create;
+}
+
+export function posOf(grid, x) {
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (grid[r][c] === x) return [r, c];
+  return null;
+}
+
+/**
+ * Scambio tra tessere speciali (a e b sono già al nuovo posto). Dice quali celle svuotare:
+ *   Forno + Forno           -> 'cross': una riga e una colonna insieme
+ *   Pala + ingrediente      -> 'type':  tutti gli ingredienti di quel tipo
+ *   Pala + Forno            -> 'fire':  tutti quelli di quel tipo diventano Forni e scattano
+ *   Pala + Pala             -> 'all':   tutta la scacchiera
+ * Restituisce null se è uno scambio normale, da giudicare con findMatches().
+ */
+export function comboClear(grid, a, b, rnd = Math.random) {
+  if (a.sp !== 'bomb' && b.sp !== 'bomb') {
+    if (!a.sp || !b.sp) return null;
+    a.sp = 'row'; b.sp = 'col';
+    return { kind: 'cross', keys: [keyOf(...posOf(grid, a)), keyOf(...posOf(grid, b))] };
+  }
+  const bomb = a.sp === 'bomb' ? a : b, other = bomb === a ? b : a;
+  let keys, kind;
+  if (other.sp === 'bomb') {
+    kind = 'all'; keys = [];
+    for (let i = 0; i < N * N; i++) keys.push(i);
+    other.sp = null;
+  } else {
+    kind = other.sp ? 'fire' : 'type';
+    keys = ofType(grid, other.t);
+    if (other.sp) for (const k of keys) { const x = grid[Math.floor(k / N)][k % N]; if (!x.sp) x.sp = rnd() < 0.5 ? 'row' : 'col'; }
+  }
+  bomb.sp = null;
+  keys.push(keyOf(...posOf(grid, bomb)));
+  return { kind, keys };
 }
 
 export function ofType(grid, t) {

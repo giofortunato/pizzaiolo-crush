@@ -12,21 +12,33 @@ npx expo start
 
 Poi inquadra il QR code con **Expo Go** (iOS o Android). Puoi anche premere `w` per aprirlo nel browser.
 
+## Provarlo sul telefono senza il Mac acceso
+
+Il progetto usa EAS Update (`@giofortunato/pizzaiolo-crush` su expo.dev).
+
+```bash
+npx eas-cli@latest update --channel preview --environment preview --message "cosa è cambiato"
+```
+
+Poi apri **Expo Go** con lo stesso account: il progetto compare nell'elenco, con l'ultimo aggiornamento del ramo `preview`.
+
 ## Struttura
 
 | File | Cosa fa |
 |---|---|
 | `App.js` | Avvio, passaggio mappa ↔ partita, schermata di gioco e finestre (inizio, ripresa, vittoria, sconfitta) |
-| `src/Map.js` | Mappa degli ordini: stelle, record, ordine successivo, "ricomincia da capo" |
-| `src/engine.js` | Il gioco in movimento: stato della partita, animazioni, suoni, vibrazioni, salvataggio |
+| `src/Map.js` | Mappa: ordini con stelle e record, pizza del giorno, ora di punta, gettoni, impostazioni, statistiche |
+| `src/engine.js` | Il gioco in movimento: stato della partita, modalità, attrezzi, animazioni, salvataggio |
 | `src/rules.js` | Regole pure, senza React: file, mosse valide, tessere speciali, ostacoli, gravità |
-| `src/progress.js` | Progressi (ordini sbloccati, stelle, record) e controllo dei salvataggi letti dal disco |
+| `src/progress.js` | Progressi (stelle, record, gettoni, statistiche, serie giornaliera) e controllo dei salvataggi |
+| `src/sound.js`, `src/haptic.js`, `src/motion.js` | Effetti e musica, vibrazione, "riduci movimento" |
 | `src/save.js` | Lettura e scrittura su `AsyncStorage` |
 | `src/Board.js` | Griglia animata (`Animated` + `PanResponder`), effetti forno e punteggi |
 | `src/Pizza.js` | Pizza disegnata con `react-native-svg` che si compone durante la partita |
 | `src/data.js` | Ingredienti, livelli e frasi dei clienti: **qui si aggiungono nuovi ordini** |
 | `test/` | Test di regole e progressi |
 | `scripts/sim.mjs` | Simulatore: gioca ogni ordine centinaia di volte per tarare la difficoltà |
+| `scripts/make-sounds.py`, `scripts/make-music.py` | Generano effetti e musica (sintetizzati, nessun file di terze parti) |
 
 ## Regole
 
@@ -36,6 +48,11 @@ Poi inquadra il QR code con **Expo Go** (iOS o Android). Puoi anche premere `w` 
 - Completi l'ordine prima di finire le mosse e le mosse avanzate diventano punti bonus e stelle (da 1 a 3).
 - **Ingredienti infarinati** (dal 6° ordine): non si spostano, ma se finiscono in una fila vengono via come gli altri.
 - **Impasto crudo** (dal 7° ordine): non si sposta e non fa fila. Servono due file lì accanto (o due colpi di Forno) per cuocerlo.
+- **Due speciali insieme**: Forno + Forno fa una croce, Pala + Forno trasforma in Forni tutti gli ingredienti di quel tipo.
+- **Gettoni 🪙**: uno per ogni stella nuova, due per la pizza del giorno. Si spendono in attrezzi che non consumano mosse:
+  🔪 Coltello (1) toglie un ingrediente, 🍴 Forchetta (2) una riga, 🪵 Legna (3) dà 5 mosse quando il cliente sta per andarsene.
+- **Pizza del giorno**: stesso ordine e stessa scacchiera di partenza per tutti; servirla ogni giorno allunga la serie.
+- **Ora di punta** (dopo 3 ordini): 60 secondi, niente ordine, solo punti.
 - Dalla mappa puoi rifare un ordine già servito per migliorare stelle e record.
 - La partita si salva dopo ogni mossa: se chiudi l'app a metà ordine, riparti da lì.
 
@@ -51,7 +68,6 @@ finché la percentuale "a caso" scende piano piano da un ordine al successivo.
 
 ## Prossimi passi possibili
 
-- Power-up del pizzaiolo (pala, mattarello, mosse extra) guadagnati con le stelle
-- Modalità a tempo "ora di punta"
-- Musica di fondo e tutorial al primo avvio
-- "Pizzeria del giorno": livello unico per tutti, con classifica per città (serve un backend)
+- Classifica della pizza del giorno per città (serve un backend)
+- Ostacolo fisso sulla scacchiera ("cella bruciata"): richiede una gravità diversa
+- Build per gli store con EAS Build

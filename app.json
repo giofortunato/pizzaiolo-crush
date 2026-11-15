@@ -24,6 +24,18 @@
     "plugins": [
       "expo-audio",
       "expo-asset"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c67a5d7d-d2fa-4fa6-a3ba-0b0d6604c17f"
+      }
+    },
+    "owner": "giofortunato",
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c67a5d7d-d2fa-4fa6-a3ba-0b0d6604c17f"
+    }
   }
 }

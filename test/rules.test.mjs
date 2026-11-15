@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { N, BOMB, DOUGH, LEVELS, T, levelFor } from '../src/data.js';
 import {
   keyOf, findMatches, findMove, findMoves, planSpecials, clearStep, collapse,
-  newBoard, reshuffle, starsFor, validGrid, commonType, canMove,
+  newBoard, reshuffle, starsFor, validGrid, commonType, canMove, comboClear, swapCells,
 } from '../src/rules.js';
 
 // Griglia da 8 righe di testo. Cifre = ingredienti, D = impasto crudo, P = Pala,
@@ -75,6 +75,69 @@ test('planSpecials: 3 niente, 4 Forno, 5 Pala, incrocio Pala', () => {
 test('planSpecials: la speciale nasce dove hai scambiato', () => {
   const g = findMatches(board(rows({ 0: '0000' })));
   assert.deepEqual([...planSpecials(g, (r, c) => c === 3).keys()], [keyOf(0, 3)]);
+});
+
+test('findMove: due Forni vicini si possono scambiare anche senza fila', () => {
+  const g = board(EMPTY);
+  g[4][3].sp = 'row'; g[4][4].sp = 'col';
+  assert.deepEqual(findMove(g), [[4, 3], [4, 4]]);
+  g[4][4].lock = true;
+  assert.equal(findMove(g), null);
+});
+
+// Scambia due celle e chiede a comboClear cosa succede, come fa il gioco.
+function combo(g, r1, c1, r2, c2) {
+  const a = g[r1][c1], b = g[r2][c2];
+  swapCells(g, r1, c1, r2, c2);
+  return comboClear(g, a, b, () => 0.1);
+}
+
+test('comboClear: scambio normale = null', () => {
+  const g = board(EMPTY);
+  assert.equal(combo(g, 0, 0, 0, 1), null);
+  g[0][0].sp = 'row';
+  assert.equal(combo(g, 0, 0, 0, 1), null); // un Forno solo non basta
+});
+
+test('comboClear: Forno + Forno fa la croce', () => {
+  const g = board(EMPTY);
+  g[4][3].sp = 'row'; g[4][4].sp = 'row';
+  const res = combo(g, 4, 3, 4, 4);
+  assert.equal(res.kind, 'cross');
+  const out = clearStep(g, new Set(res.keys));
+  assert.equal(out.beams.length, 2);
+  assert.equal(out.removed.length, N + N - 1);
+});
+
+test('comboClear: Pala + ingrediente prende tutti quelli uguali', () => {
+  const g = board(rows({ 0: 'P0', 5: '0.0.0' }));
+  const res = combo(g, 0, 0, 0, 1);
+  assert.equal(res.kind, 'type');
+  assert.equal(res.keys.length, 5); // quattro 0 più la Pala
+  const out = clearStep(g, new Set(res.keys));
+  assert.equal(out.removed.length, 5);
+  assert.equal(out.fired, false);
+});
+
+test('comboClear: Pala + Forno trasforma tutti in Forni', () => {
+  const g = board(rows({ 0: 'P0', 3: '..0', 6: '.....0' }));
+  g[0][1].sp = 'row';
+  const res = combo(g, 0, 0, 0, 1);
+  assert.equal(res.kind, 'fire');
+  assert.equal(g[3][2].sp, 'row');
+  assert.equal(g[6][5].sp, 'row');
+  const out = clearStep(g, new Set(res.keys));
+  assert.equal(out.beams.length, 3);
+  assert.equal(out.removed.length, 3 * N);
+});
+
+test('comboClear: Pala + Pala svuota tutto, l’impasto prende un colpo', () => {
+  const g = board(rows({ 0: 'PP', 7: 'D' }));
+  const res = combo(g, 0, 0, 0, 1);
+  assert.equal(res.kind, 'all');
+  const out = clearStep(g, new Set(res.keys));
+  assert.equal(out.removed.length, N * N - 1);
+  assert.equal(g[7][0].hp, 1);
 });
 
 test('clearStep: toglie la fila e basta', () => {

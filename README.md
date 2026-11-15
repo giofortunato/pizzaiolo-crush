@@ -29,20 +29,32 @@ non la accendi con 🎵. Ogni pizza ha un "umore" (`mood` in `src/data.js`): nap
 americana, lenta, mare. In `src/music.js` si collega un brano a ogni umore; quelli senza brano
 usano `napoletana`.
 
-Brani di **Sascha Ende** ([ende.app](https://ende.app)), licenza
+Due brani sono di **Sascha Ende** ([ende.app](https://ende.app)), licenza
 [CC BY 4.0](https://ende.app/standard-license): uso gratuito anche commerciale, con obbligo di citare
 l'autore (fatto qui e in fondo alla mappa). Per le condizioni del sito: non dichiararli propri, non
 registrarli in sistemi di riconoscimento audio (Content ID).
 
-| Umore | Brano | File |
-|---|---|---|
-| napoletana | [Italy - Espresso in the Piazza](https://ende.app/en/song/13956-italy-espresso-in-the-piazza) | `assets/sounds/music/napoletana.m4a` |
-| piccante | [Italy - Kitchen Tarantella](https://ende.app/en/song/13958-italy-kitchen-tarantella) | `assets/sounds/music/piccante.m4a` |
-| americana | per ora *Kitchen Tarantella*; previsto: [Ultimate Tropical Vol. 13](https://ende.app/en/song/13408-ultimate-tropical-vol-13) | `piccante.m4a` |
-| lenta | previsto: [Italy - Venice by Gondola](https://ende.app/en/song/13962-italy-venice-by-gondola) | — |
-| mare | previsto: [Italy - Last Waltz in Palermo](https://ende.app/en/song/13964-italy-last-waltz-in-palermo) | — |
+Tre brani sono generati con **Suno** (suno.com) dall'account del progetto, con il **piano gratuito**:
+valgono solo per **uso non commerciale**. Prima di pubblicare il gioco su uno store vanno rigenerati
+con un abbonamento Suno a pagamento (i diritti dipendono dal piano al momento della creazione) oppure
+sostituiti.
 
-I file sono compressi con `afconvert -f m4af -d aac -b 96000 brano.mp3 assets/sounds/music/<umore>.m4a`.
+| Umore | Brano | Fonte | File |
+|---|---|---|---|
+| napoletana | [Italy - Espresso in the Piazza](https://ende.app/en/song/13956-italy-espresso-in-the-piazza) | Sascha Ende, CC BY 4.0 | `napoletana.m4a` |
+| piccante | [Italy - Kitchen Tarantella](https://ende.app/en/song/13958-italy-kitchen-tarantella) | Sascha Ende, CC BY 4.0 | `piccante.m4a` |
+| americana | Pizzaiolo Crush - americana | Suno, piano gratuito | `americana.m4a` |
+| lenta | Pizzaiolo Crush - lenta | Suno, piano gratuito | `lenta.m4a` |
+| mare | Pizzaiolo Crush - mare | Suno, piano gratuito | `mare.m4a` |
+
+Descrizioni usate su Suno (modalità Advanced, testo vuoto = strumentale):
+
+- americana: `playful tropical ukulele and steel drums, cheerful cartoon cooking game background music, bouncy, light percussion, happy, instrumental, seamless loop`
+- lenta: `gentle Italian trattoria background music, soft accordion and nylon guitar, slow relaxed tempo, warm and cozy, calm, instrumental, seamless loop`
+- mare: `slow Italian waltz 3/4, mandolin tremolo and accordion, Mediterranean seaside, romantic and airy, light strings, instrumental, seamless loop`
+
+I file sono in `assets/sounds/music/`, compressi con `afconvert -f m4af -d aac -b 96000 brano.mp3 assets/sounds/music/<umore>.m4a`
+(da Suno scaricare in MP3: l'M4A di Suno è in Opus e afconvert non lo legge).
 
 ## Struttura
 

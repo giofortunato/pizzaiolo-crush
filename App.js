@@ -11,6 +11,7 @@ import { T } from './src/data';
 import { C, F } from './src/theme';
 import Board, { INSET_X, INSET_Y, cellFor } from './src/Board';
 import Pizza from './src/Pizza';
+import LevelMap from './src/Map';
 import { loadProgress, saveProgress } from './src/save';
 import { initSound, setMuted } from './src/sound';
 
@@ -18,7 +19,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />
-      <GameScreen />
+      <Root />
     </SafeAreaProvider>
   );
 }
@@ -51,10 +52,11 @@ function useBox() {
 
 // Un ingrediente che vola dalla scacchiera alla pizza, con un piccolo arco.
 function Fly({ e, from, to, onLand }) {
-  const v = useRef(new Animated.Value(0)).current;
+  const v = useState(() => new Animated.Value(0))[0];
   useEffect(() => {
     Animated.timing(v, { toValue: 1, duration: 620, delay: 140, easing: Easing.in(Easing.quad), useNativeDriver: true })
       .start(({ finished }) => finished && onLand());
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- parte una volta sola, quando l'ingrediente compare
   }, []);
   const lift = 70, arc = [0, 0.71, 1, 0.71, 0];
   const translateX = v.interpolate({ inputRange: [0, 1], outputRange: [from.x, to.x] });
@@ -84,13 +86,14 @@ function FlyLayer({ effects, layer, board, pizza, onLand }) {
 
 // Piccolo balzo ogni volta che `value` cambia; `big` lo rende più vistoso.
 function useBump(value, big, enabled = true) {
-  const sc = useRef(new Animated.Value(1)).current;
+  const sc = useState(() => new Animated.Value(1))[0];
   const first = useRef(true);
   useEffect(() => {
     if (first.current) { first.current = false; return; }
     if (!enabled) return;
     sc.setValue(big ? 1.35 : 1.18);
     Animated.spring(sc, { toValue: 1, speed: 18, bounciness: 12, useNativeDriver: true }).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deve scattare solo quando cambia `value`
   }, [value]);
   return sc;
 }
@@ -98,7 +101,7 @@ function useBump(value, big, enabled = true) {
 // Contamosse: salta a ogni mossa, pulsa quando ne restano poche.
 function Moves({ moves, low }) {
   const bump = useBump(moves);
-  const pulse = useRef(new Animated.Value(1)).current;
+  const pulse = useState(() => new Animated.Value(1))[0];
   useEffect(() => {
     if (!low) { pulse.setValue(1); return; }
     const loop = Animated.loop(Animated.sequence([
@@ -107,7 +110,7 @@ function Moves({ moves, low }) {
     ]));
     loop.start();
     return () => loop.stop();
-  }, [low]);
+  }, [low, pulse]);
   return (
     <Animated.View style={[styles.moves, low && styles.movesLow, { transform: [{ scale: Animated.multiply(bump, pulse) }] }]}>
       <Text style={styles.movesN}>{moves}</Text>
@@ -138,58 +141,86 @@ function Face({ face, talking }) {
 
 // Compare con un balzo, dopo `delay` ms. Per stelle, pizza e finestre.
 function Pop({ delay = 0, style, children }) {
-  const v = useRef(new Animated.Value(0)).current;
+  const v = useState(() => new Animated.Value(0))[0];
   useEffect(() => {
     Animated.spring(v, { toValue: 1, delay, speed: 14, bounciness: 12, useNativeDriver: true }).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- animazione d'ingresso, una volta sola
   }, []);
   return <Animated.View style={[style, { opacity: v, transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }] }]}>{children}</Animated.View>;
 }
 
-function GameScreen() {
+// Carica salvataggio e caratteri, poi mostra la mappa degli ordini oppure la partita.
+function Root() {
   const [, rerender] = useReducer((x) => x + 1, 0);
-  const gameRef = useRef(null);
-  if (!gameRef.current) gameRef.current = new Game(() => rerender(), saveProgress);
-  const game = gameRef.current;
+  const [game] = useState(() => new Game(() => rerender(), saveProgress));
   const [ready, setReady] = useState(false);
+  const [screen, setScreen] = useState('map');
   const [muted, setMutedState] = useState(false);
   const [fontsLoaded, fontError] = useFonts({ LilitaOne_400Regular, Nunito_600SemiBold, Nunito_600SemiBold_Italic, Nunito_800ExtraBold });
-  const [layerRef, layerBox, onLayerLayout] = useBox();
-  const [boardRef, boardBox, onBoardLayout] = useBox();
-  const [pizzaRef, pizzaBox, onPizzaLayout] = useBox();
-  const pizzaScale = useRef(new Animated.Value(1)).current;
-  const onLand = () => {
-    pizzaScale.setValue(1.14);
-    Animated.spring(pizzaScale, { toValue: 1, speed: 20, bounciness: 10, useNativeDriver: true }).start();
-  };
+  const { width, height } = useWindowDimensions();
 
-  // All'avvio riprende dall'ultimo ordine salvato.
+  // All'avvio: se c'era un ordine lasciato a metà si riparte da lì, altrimenti dalla mappa.
   useEffect(() => {
     let alive = true;
     initSound().then((m) => { if (alive) setMutedState(m); });
     loadProgress().then((saved) => {
       if (!alive) return;
-      if (saved) game.restore(saved);
+      if (game.load(saved)) setScreen('game');
       setReady(true);
     });
     return () => { alive = false; };
   }, [game]);
-  const { width, height } = useWindowDimensions();
-  const boardW = Math.max(240, Math.min(width - 24, 440, height - 340));
-  const lvl = game.lvl;
-  const talk = game.talk;
 
   // Se i font non arrivano (es. senza rete sul web) si parte lo stesso con quelli di sistema.
   if (!ready || (!fontsLoaded && !fontError)) return <View style={styles.root} />;
 
+  // Toccando l'ordine che stavi già giocando lo riprendi, altrimenti parte da capo.
+  const pick = (i) => {
+    if (!(game.inProgress() && game.lvlIdx === i)) game.startLevel(i);
+    setScreen('game');
+  };
+  const playing = screen === 'game' && game.lvl;
+
   return (
     <SafeAreaView style={styles.root}>
       <OvenGlow width={width} height={height} />
+      {playing ? (
+        <GameScreen
+          game={game} width={width} height={height} onMap={() => setScreen('map')}
+          muted={muted} onMute={() => { setMuted(!muted); setMutedState(!muted); }}
+        />
+      ) : (
+        <View style={{ flex: 1, width: Math.min(width, 464) }}><LevelMap game={game} onPick={pick} /></View>
+      )}
+    </SafeAreaView>
+  );
+}
+
+function GameScreen({ game, width, height, onMap, muted, onMute }) {
+  const [layerRef, layerBox, onLayerLayout] = useBox();
+  const [boardRef, boardBox, onBoardLayout] = useBox();
+  const [pizzaRef, pizzaBox, onPizzaLayout] = useBox();
+  const pizzaScale = useState(() => new Animated.Value(1))[0];
+  const onLand = () => {
+    pizzaScale.setValue(1.14);
+    Animated.spring(pizzaScale, { toValue: 1, speed: 20, bounciness: 10, useNativeDriver: true }).start();
+  };
+
+  const boardW = Math.max(240, Math.min(width - 24, 440, height - 340));
+  const lvl = game.lvl;
+  const talk = game.talk;
+
+  return (
+    <>
       <View ref={layerRef} onLayout={onLayerLayout} style={[styles.app, { width: Math.min(width, 464) }]}>
         <View style={styles.header}>
-          <Text style={styles.h1}>Pizzaiolo Crush</Text>
+          <Text style={[styles.h1, { flexShrink: 1 }]} numberOfLines={1} adjustsFontSizeToFit>Pizzaiolo Crush</Text>
           <View style={styles.headerRight}>
+            <Pressable onPress={onMap} hitSlop={8} accessibilityRole="button" accessibilityLabel="Mappa degli ordini" style={styles.iconBtn}>
+              <Text style={styles.iconBtnT}>🗺️</Text>
+            </Pressable>
             <Pressable
-              onPress={() => { setMuted(!muted); setMutedState(!muted); }}
+              onPress={onMute}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel={muted ? 'Attiva i suoni' : 'Disattiva i suoni'}
@@ -238,15 +269,20 @@ function GameScreen() {
         />
       </View>
 
-      {game.modal && <GameModal key={game.modal.type + game.lvlIdx} game={game} />}
-    </SafeAreaView>
+      {game.modal && <GameModal key={game.modal.type + game.lvlIdx} game={game} onMap={onMap} />}
+    </>
   );
 }
 
-function GameModal({ game }) {
+function GameModal({ game, onMap }) {
   const { lvl, modal } = game;
   const [shared, setShared] = useState(false);
   let body;
+  const toMap = (
+    <Pressable onPress={onMap} style={styles.reset} hitSlop={8} accessibilityRole="button">
+      <Text style={styles.resetT}>Torna alla mappa</Text>
+    </Pressable>
+  );
 
   if (modal.type === 'start') {
     body = (
@@ -267,12 +303,31 @@ function GameModal({ game }) {
             <Text style={styles.helpT}>🍕 <Text style={styles.strong}>5 in fila o a L/T</Text> crea la Pala: scambiala con un ingrediente per prenderli tutti.</Text>
           </View>
         )}
+        {(lvl.flour || lvl.dough) ? (
+          <View style={styles.help}>
+            {lvl.flour ? <Text style={styles.helpT}>🌫️ <Text style={styles.strong}>Infarinati</Text> ({lvl.flour}): non si spostano. Mettili in fila con gli altri per liberarli.</Text> : null}
+            {lvl.dough ? <Text style={styles.helpT}>🫓 <Text style={styles.strong}>Impasto crudo</Text> ({lvl.dough}): non si sposta. Fai due file lì accanto per cuocerlo.</Text> : null}
+          </View>
+        ) : null}
         <View style={styles.btns}><Btn label="Inforna!" onPress={() => game.begin()} /></View>
-        {game.lvlIdx > 0 && (
-          <Pressable onPress={() => game.restore({ lvlIdx: 0, score: 0 })} style={styles.reset} hitSlop={8}>
-            <Text style={styles.resetT}>Ricomincia da capo</Text>
-          </Pressable>
-        )}
+        {toMap}
+      </>
+    );
+  } else if (modal.type === 'resume') {
+    body = (
+      <>
+        <Text style={styles.big}>{lvl.face}</Text>
+        <Text style={styles.h2}>Bentornato!</Text>
+        <Text style={styles.p}>{lvl.who} aspetta ancora la sua {lvl.pizza}.</Text>
+        <View style={styles.list}>
+          {Object.keys(lvl.need).map((k) => {
+            const left = Math.max(0, lvl.need[k] - (game.got[k] || 0));
+            return <View key={k} style={styles.chip}><Text style={styles.chipE}>{T[k].e}</Text><Text style={styles.chipN}>{left || '✓'}</Text></View>;
+          })}
+        </View>
+        <Text style={styles.p}>Ti restano <Text style={styles.strong}>{game.moves} mosse</Text>.</Text>
+        <View style={styles.btns}><Btn label="Continua" onPress={() => game.begin()} /></View>
+        {toMap}
       </>
     );
   } else if (modal.type === 'win') {
@@ -288,20 +343,21 @@ function GameModal({ game }) {
           ))}
         </View>
         <Text style={styles.quote}>“{lvl.win}”</Text>
-        <Text style={styles.small}>Mosse avanzate: {game.moves} (+{modal.bonus} punti). Totale {game.score} punti.</Text>
+        <Text style={styles.small}>Mosse avanzate: {game.moves} (+{modal.bonus} punti). Totale {game.score} punti.{modal.record ? ' Nuovo record!' : ''}</Text>
         <View style={styles.btns}>
           <Btn alt label={shared ? 'Condiviso ✓' : 'Condividi'} onPress={async () => {
-            try { await Share.share({ message: game.shareText() }); setShared(true); } catch (e) {}
+            try { await Share.share({ message: game.shareText() }); setShared(true); } catch {}
           }} />
           <Btn label="Prossimo ordine" onPress={() => game.next()} />
         </View>
+        {toMap}
       </>
     );
   } else {
     body = (
       <>
         <Text style={styles.big}>😤</Text>
-        <Text style={styles.h2}>{lvl.who} se n'è andato</Text>
+        <Text style={styles.h2}>{lvl.who} se n’è andato</Text>
         <Text style={styles.quote}>“{lvl.lose}”</Text>
         <View style={styles.list}>
           {Object.keys(lvl.need).filter((k) => (game.got[k] || 0) < lvl.need[k]).map((k) => (
@@ -309,12 +365,13 @@ function GameModal({ game }) {
           ))}
         </View>
         <View style={styles.btns}><Btn label="Riprova" onPress={() => game.retry()} /></View>
+        {toMap}
       </>
     );
   }
 
-  const v = useRef(new Animated.Value(0)).current;
-  useEffect(() => { Animated.spring(v, { toValue: 1, speed: 16, bounciness: 7, useNativeDriver: true }).start(); }, []);
+  const v = useState(() => new Animated.Value(0))[0];
+  useEffect(() => { Animated.spring(v, { toValue: 1, speed: 16, bounciness: 7, useNativeDriver: true }).start(); }, [v]);
   return (
     <Animated.View style={[styles.overlay, { opacity: v }]}>
       <Animated.View style={[styles.card, { transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] }) }, { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [28, 0] }) }] }]}>

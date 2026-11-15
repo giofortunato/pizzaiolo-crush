@@ -22,6 +22,28 @@ npx eas-cli@latest update --channel preview --environment preview --message "cos
 
 Poi apri **Expo Go** con lo stesso account: il progetto compare nell'elenco, con l'ultimo aggiornamento del ramo `preview`.
 
+## Musica
+
+La musica parte quando inforni e si ferma a pizza finita; sulla mappa non suona. È spenta finché
+non la accendi con 🎵. Ogni pizza ha un "umore" (`mood` in `src/data.js`): napoletana, piccante,
+americana, lenta, mare. In `src/music.js` si collega un brano a ogni umore; quelli senza brano
+usano `napoletana`.
+
+Brani di **Sascha Ende** ([ende.app](https://ende.app)), licenza
+[CC BY 4.0](https://ende.app/standard-license): uso gratuito anche commerciale, con obbligo di citare
+l'autore (fatto qui e in fondo alla mappa). Per le condizioni del sito: non dichiararli propri, non
+registrarli in sistemi di riconoscimento audio (Content ID).
+
+| Umore | Brano | File |
+|---|---|---|
+| napoletana | [Italy - Espresso in the Piazza](https://ende.app/en/song/13956-italy-espresso-in-the-piazza) | `assets/sounds/music/napoletana.m4a` |
+| piccante | [Italy - Kitchen Tarantella](https://ende.app/en/song/13958-italy-kitchen-tarantella) | `assets/sounds/music/piccante.m4a` |
+| americana | per ora *Kitchen Tarantella*; previsto: [Ultimate Tropical Vol. 13](https://ende.app/en/song/13408-ultimate-tropical-vol-13) | `piccante.m4a` |
+| lenta | previsto: [Italy - Venice by Gondola](https://ende.app/en/song/13962-italy-venice-by-gondola) | — |
+| mare | previsto: [Italy - Last Waltz in Palermo](https://ende.app/en/song/13964-italy-last-waltz-in-palermo) | — |
+
+I file sono compressi con `afconvert -f m4af -d aac -b 96000 brano.mp3 assets/sounds/music/<umore>.m4a`.
+
 ## Struttura
 
 | File | Cosa fa |
@@ -38,7 +60,8 @@ Poi apri **Expo Go** con lo stesso account: il progetto compare nell'elenco, con
 | `src/data.js` | Ingredienti, livelli e frasi dei clienti: **qui si aggiungono nuovi ordini** |
 | `test/` | Test di regole e progressi |
 | `scripts/sim.mjs` | Simulatore: gioca ogni ordine centinaia di volte per tarare la difficoltà |
-| `scripts/make-sounds.py`, `scripts/make-music.py` | Generano effetti e musica (sintetizzati, nessun file di terze parti) |
+| `scripts/make-sounds.py` | Genera gli effetti sonori (sintetizzati) |
+| `src/music.js` | Brani di sottofondo per umore e crediti |
 
 ## Regole
 

@@ -87,6 +87,20 @@ def pop(f):
     return tone(0.09, f * 1.6, f, vol=0.6, release=0.8)
 
 
+def jingle():
+    run = seq(*(tone(0.085, note(n), vol=0.28, release=0.5) for n in ('C5', 'E5', 'G5', 'C6', 'E6')))
+    fan = seq(
+        tone(0.13, note('G5'), wave_fn=soft_square, vol=0.28, release=0.3),
+        tone(0.13, note('A5'), wave_fn=soft_square, vol=0.28, release=0.3),
+        tone(0.13, note('B5'), wave_fn=soft_square, vol=0.28, release=0.3),
+        tone(1.0, note('C6'), wave_fn=soft_square, vol=0.3, release=0.65, vibrato=0.012),
+        gap=0.02)
+    chord = mix(mix(tone(1.0, note('C4'), vol=0.22, release=0.7), tone(1.0, note('E4'), vol=0.16, release=0.7)),
+                tone(1.0, note('G4'), vol=0.16, release=0.7))
+    lead = seq(run, fan, gap=0.06)
+    return mix(lead, [0.0] * (len(lead) - len(chord)) + chord)
+
+
 SOUNDS = {
     # scambio di due ingredienti
     'swap': lambda: tone(0.08, 320, 640, vol=0.25, release=0.7),
@@ -103,9 +117,8 @@ SOUNDS = {
     'fire': lambda: mix(noise(0.45, 0.5), tone(0.45, 180, 70, vol=0.25, release=0.8)),
     # il nonno brontola
     'nonno': lambda: seq(tone(0.16, 150, 120, soft_square, 0.35, vibrato=0.06), tone(0.22, 135, 95, soft_square, 0.35, vibrato=0.06), gap=0.04),
-    # pizza servita
-    'win': lambda: seq(*(tone(d, note(n), wave_fn=soft_square, vol=0.3, release=0.4) for n, d in
-                         (('C5', 0.11), ('E5', 0.11), ('G5', 0.11), ('C6', 0.35)))),
+    # pizza servita: scaletta veloce, tre note di fanfara e accordo finale
+    'win': jingle,
     # cliente se ne va
     'lose': lambda: seq(*(tone(d, note(n), wave_fn=soft_square, vol=0.3, release=0.5, vibrato=v) for n, d, v in
                           (('G4', 0.18, 0), ('F4', 0.18, 0), ('D4', 0.18, 0), ('B3', 0.45, 0.02)))),

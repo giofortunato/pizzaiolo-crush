@@ -1,22 +1,16 @@
 import { Animated } from 'react-native';
-import * as Haptics from 'expo-haptics';
-import { N, DOUGH, T, NONNO, PRAISE, levelFor } from './data';
+import { N, DOUGH, T, NONNO, PRAISE, TOOLS, LOGS, RUSH, RUSH_SECONDS, levelFor } from './data';
 import {
   keyOf, canMove, findMatches, findMove, swapCells, planSpecials, clearStep, collapse,
-  newBoard, reshuffle, ofType, starsFor, plainCell,
+  newBoard, reshuffle, comboClear, starsFor, plainCell,
 } from './rules';
-import { emptyProgress, recordWin } from './progress';
+import { emptyProgress, recordWin, recordDaily, dailyLevel, dailyStreak, dayKey, seeded, DAILY_COINS } from './progress';
 import { sfx } from './sound';
+import { haptic } from './haptic';
+import { motion } from './motion';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-const haptic = (kind = 'light') => {
-  try {
-    if (kind === 'success') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    else if (kind === 'error') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    else Haptics.impactAsync(kind === 'heavy' ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Light);
-  } catch {}
-};
 
 /**
  * Il gioco, fuori da React: stato, animazioni, suoni.
@@ -33,6 +27,11 @@ export class Game {
     this.talk = null;
     // Finché non parte un ordine (startLevel o resume) non c'è niente in tavola.
     this.lvl = null;
+    this.mode = 'level'; // 'level' (ordine della mappa), 'daily' (pizza del giorno), 'rush' (ora di punta)
+    this.day = null;
+    this.timeLeft = 0;
+    this.tool = null;  // attrezzo scelto, in attesa che tocchi la scacchiera
+    this.guide = null; // prima partita: le due celle da scambiare, indicate da una mano
     this.lvlIdx = 0;
     this.score = 0; // punti dell'ordine in corso
     this.moves = this.startMoves = 0;
@@ -52,7 +51,8 @@ export class Game {
   // Carica i progressi letti dal disco. Restituisce true se c'era una partita a metà (ora pronta a riprendere).
   load(saved) {
     if (!saved) return false;
-    this.progress = { unlocked: saved.unlocked, stars: saved.stars, best: saved.best };
+    const { current, ...progress } = saved;
+    this.progress = progress;
     if (!saved.current) return false;
     this.resume(saved.current);
     return true;
@@ -60,6 +60,7 @@ export class Game {
 
   snapshot() {
     return {
+      mode: this.mode, day: this.day,
       lvlIdx: this.lvlIdx, score: this.score, moves: this.moves, got: { ...this.got }, nonnoCount: this.nonnoCount,
       grid: this.grid.map((row) => row.map(plainCell)),
     };
@@ -67,15 +68,27 @@ export class Game {
 
   // Scrive progressi e partita in corso. Si chiama solo a scacchiera ferma, quindi la griglia è completa.
   persist() {
-    this.onSave({ ...this.progress, current: this.over ? null : this.snapshot() });
+    // L'ora di punta non si riprende: è una corsa contro il tempo.
+    this.onSave({ ...this.progress, current: this.over || this.mode === 'rush' ? null : this.snapshot() });
   }
 
   // C'è un ordine iniziato e non ancora finito?
-  inProgress() { return !!this.lvl && (!this.over || (!!this.modal && this.modal.type === 'resume')); }
+  inProgress(mode = 'level') {
+    return !!this.lvl && this.mode === mode && (!this.over || (!!this.modal && this.modal.type === 'resume'));
+  }
+
+  // Si torna alla mappa. Un ordine resta in sospeso; l'ora di punta invece si abbandona.
+  leave() {
+    this.clearHint();
+    this.tool = null;
+    if (this.mode === 'rush') { this.stopClock(); this.lvl = null; this.modal = null; this.over = true; }
+    this.emit();
+  }
 
   // Cancella tutto: progressi, stelle e partita in corso.
   reset() {
     this.clearHint();
+    this.stopClock();
     this.progress = emptyProgress();
     this.lvl = null; this.modal = null; this.over = true;
     this.persist();
@@ -83,43 +96,142 @@ export class Game {
   }
 
   // ---------- livello ----------
-  setup(idx, cells) {
+  setup(mode, idx, lvl, cells) {
     this.clearHint();
+    this.stopClock();
+    this.mode = mode;
     this.lvlIdx = idx;
-    this.lvl = levelFor(idx);
-    this.startMoves = this.lvl.moves;
+    this.lvl = lvl;
+    this.startMoves = lvl.moves;
     this.over = true;
     this.busy = false;
     this.sel = null;
+    this.tool = null;
+    this.guide = null;
     this.talk = null;
     this.tiles = new Map();
     this.grid = cells.map((row, r) => row.map((x, c) => this.makeTile(x, r, c)));
     this.genSpots();
   }
 
-  startLevel(idx = this.lvlIdx) {
-    this.setup(idx, newBoard(levelFor(idx)));
+  fresh() {
     this.moves = this.startMoves;
     this.score = 0;
     this.got = {};
     this.nonnoCount = 0;
+    this.isNew = true; // conta come partita giocata quando si inforna
     this.modal = { type: 'start' };
     this.emit();
   }
 
+  startLevel(idx = this.lvlIdx) {
+    const lvl = levelFor(idx);
+    this.day = null;
+    this.setup('level', idx, lvl, newBoard(lvl));
+    this.fresh();
+  }
+
+  // Pizza del giorno: stesso ordine e stessa scacchiera di partenza per tutti.
+  startDaily(day = dayKey()) {
+    const { idx, seed, lvl } = dailyLevel(day);
+    this.day = day;
+    this.setup('daily', idx, lvl, newBoard(lvl, seeded(seed)));
+    this.fresh();
+  }
+
+  // Ora di punta: niente ordine né mosse, solo punti finché dura il tempo.
+  startRush() {
+    this.day = null;
+    this.setup('rush', 0, RUSH, newBoard(RUSH));
+    this.timeLeft = RUSH_SECONDS;
+    this.fresh();
+  }
+
   resume(cur) {
-    this.setup(cur.lvlIdx, cur.grid);
+    const daily = cur.mode === 'daily';
+    this.day = daily ? cur.day : null;
+    this.setup(daily ? 'daily' : 'level', cur.lvlIdx, daily ? dailyLevel(cur.day).lvl : levelFor(cur.lvlIdx), cur.grid);
     this.moves = cur.moves;
     this.score = cur.score;
     this.got = { ...cur.got };
     this.nonnoCount = cur.nonnoCount || 0;
+    this.isNew = false;
     this.modal = { type: 'resume' };
     this.emit();
   }
 
-  begin() { this.modal = null; this.over = false; this.persist(); this.emit(); this.armHint(); }
+  begin() {
+    this.modal = null;
+    this.over = false;
+    if (this.isNew) { this.isNew = false; this.stat({ games: this.progress.stats.games + 1 }); }
+    this.persist();
+    // Primissima partita: una mano mostra subito quale scambio fare.
+    if (this.mode === 'level' && this.lvlIdx === 0 && this.progress.unlocked === 0 && this.moves === this.startMoves) this.guide = findMove(this.grid);
+    if (this.mode === 'rush') this.startClock();
+    this.emit();
+    this.armHint();
+  }
+
   next() { this.startLevel(this.lvlIdx + 1); }
-  retry() { this.startLevel(); }
+  retry() {
+    if (this.mode === 'rush') this.startRush();
+    else if (this.mode === 'daily') this.startDaily(this.day);
+    else this.startLevel();
+  }
+
+  stat(patch) { this.progress = { ...this.progress, stats: { ...this.progress.stats, ...patch } }; }
+  spend(coins) { this.progress = { ...this.progress, coins: this.progress.coins - coins }; }
+
+  // ---------- ora di punta ----------
+  startClock() {
+    this.stopClock();
+    this.clock = setInterval(() => {
+      this.timeLeft--;
+      if (this.timeLeft <= 0) { this.timeLeft = 0; this.stopClock(); if (!this.busy) this.checkEnd(); }
+      this.emit();
+    }, 1000);
+  }
+
+  stopClock() { clearInterval(this.clock); this.clock = null; }
+
+  // ---------- attrezzi ----------
+  // Sceglie (o posa) un attrezzo. Poi il prossimo tocco sulla scacchiera lo usa.
+  selectTool(name) {
+    if (this.busy || this.over || this.mode === 'rush') return;
+    if (this.tool === name) this.tool = null;
+    else if (this.progress.coins < TOOLS[name].cost) { this.say('Non hai abbastanza gettoni. Si guadagnano con le stelle!'); haptic('error'); sfx('bad'); return; }
+    else { this.tool = name; this.sel = null; this.say(TOOLS[name].tip); }
+    this.emit();
+  }
+
+  async useTool(p) {
+    const name = this.tool;
+    this.tool = null;
+    this.busy = true;
+    this.clearHint();
+    this.guide = null;
+    this.spend(TOOLS[name].cost);
+    const keys = [];
+    if (name === 'knife') keys.push(keyOf(p.r, p.c));
+    else { for (let c = 0; c < N; c++) keys.push(keyOf(p.r, c)); this.fx({ kind: 'beam', h: true, i: p.r }); }
+    haptic('heavy'); sfx('fire');
+    await this.clearSet(new Set(keys), new Map(), 1);
+    await this.resolve(null);
+    await this.settle();
+  }
+
+  // Legna nel forno: il cliente stava andando via, ma con qualche mossa in più resta.
+  canAddLogs() { return this.mode !== 'rush' && this.progress.coins >= LOGS.cost; }
+  addLogs() {
+    if (!this.modal || this.modal.type !== 'lose' || !this.canAddLogs()) return;
+    this.spend(LOGS.cost);
+    this.moves += LOGS.moves;
+    this.modal = null;
+    this.over = false;
+    this.persist();
+    this.say(`Altre ${LOGS.moves} mosse. Forza!`);
+    this.armHint();
+  }
 
   pick() { const ts = this.lvl.types; return ts[Math.floor(Math.random() * ts.length)]; }
 
@@ -220,7 +332,7 @@ export class Game {
   // Se il giocatore sta fermo qualche secondo, due tessere scambiabili ondeggiano.
   armHint() {
     this.clearHint();
-    this.hintTimer = setTimeout(() => this.showHint(), 5000);
+    this.hintTimer = setTimeout(() => this.showHint(), this.guide ? 600 : 5000);
   }
 
   clearHint() {
@@ -234,8 +346,8 @@ export class Game {
   }
 
   showHint() {
-    if (this.busy || this.over || this.modal) return;
-    const m = findMove(this.grid);
+    if (this.busy || this.over || this.modal || motion.reduce) return;
+    const m = this.guide || findMove(this.grid);
     if (!m) return;
     const tiles = m.map(([r, c]) => this.grid[r][c]).filter(Boolean);
     this.hintTiles = tiles;
@@ -268,6 +380,7 @@ export class Game {
 
   tap(p) {
     if (this.busy || this.over) return;
+    if (this.tool) return this.useTool(p);
     this.armHint();
     const tile = this.grid[p.r][p.c];
     if (!canMove(tile)) return this.refuse(tile);
@@ -278,6 +391,7 @@ export class Game {
   }
 
   swipe(p, dr, dc) {
+    if (this.tool) return this.tap(p); // con un attrezzo in mano conta solo dove hai toccato
     const r2 = p.r + dr, c2 = p.c + dc;
     if (r2 < 0 || r2 >= N || c2 < 0 || c2 >= N) return;
     this.sel = null;
@@ -295,15 +409,14 @@ export class Game {
     this.emit();
     await wait(200);
 
-    if (a.sp === 'bomb' || b.sp === 'bomb') {
-      this.moves--;
-      const bomb = a.sp === 'bomb' ? a : b, other = bomb === a ? b : a;
-      let keys;
-      if (other.sp === 'bomb') { keys = []; for (let i = 0; i < N * N; i++) keys.push(i); this.say('Forno a 900 gradi! 🔥'); other.sp = null; }
-      else keys = ofType(this.grid, other.t);
-      bomb.sp = null; keys.push(keyOf(bomb.r, bomb.c));
+    const combo = comboClear(this.grid, a, b);
+    if (combo) {
+      this.spendMove();
+      if (combo.kind === 'all') this.say('Forno a 900 gradi! 🔥');
+      else if (combo.kind === 'fire') this.say('Tutti in forno! 🔥');
+      else if (combo.kind === 'cross') this.say('Doppio forno!');
       haptic('heavy'); sfx('fire');
-      await this.clearSet(new Set(keys), new Map(), 2);
+      await this.clearSet(new Set(combo.keys), new Map(), 2);
       await this.resolve(null);
     } else {
       if (!findMatches(this.grid).length) {
@@ -316,13 +429,22 @@ export class Game {
         this.armHint();
         return;
       }
-      this.moves--;
+      this.spendMove();
       await this.resolve([a, b]);
     }
+    if (this.guide) { this.guide = null; this.say('Bravo! Ora continua tu.'); }
+    await this.settle();
+  }
+
+  spendMove() { if (this.mode !== 'rush') this.moves--; }
+
+  // Fine di una mossa (o di un attrezzo): rimescola se serve, controlla se è finita, salva.
+  async settle() {
     if (!this.done() && this.moves > 0 && !findMove(this.grid)) await this.shuffle();
     this.busy = false;
     this.checkEnd();
     if (!this.over) { this.persist(); this.armHint(); }
+    this.emit();
   }
 
   async resolve(swapped) {
@@ -339,6 +461,7 @@ export class Game {
       swapped = null;
     }
     if (combo >= 3) { this.say(PRAISE[Math.floor(Math.random() * PRAISE.length)]); haptic('heavy'); }
+    if (combo > this.progress.stats.combo) this.stat({ combo });
     return combo;
   }
 
@@ -400,24 +523,45 @@ export class Game {
     if (this.lvl.need[t] && this.got[t] === this.lvl.need[t]) this.say(`${T[t].n}: perfetto così!`);
   }
 
-  done() { for (const k in this.lvl.need) if ((this.got[k] || 0) < this.lvl.need[k]) return false; return true; }
+  done() { if (this.mode === 'rush') return false; for (const k in this.lvl.need) if ((this.got[k] || 0) < this.lvl.need[k]) return false; return true; }
 
   stars() { return starsFor(this.moves, this.startMoves); }
 
   async checkEnd() {
     if (this.over) return;
-    if (this.done()) {
+    if (this.mode === 'rush') {
+      if (this.timeLeft > 0) return;
       this.over = true;
-      const bonus = this.moves * 50;
-      this.score += bonus;
-      const stars = this.stars();
-      const { progress, record } = recordWin(this.progress, this.lvlIdx, stars, this.score);
-      this.progress = progress;
+      this.clearHint();
+      const record = this.score > this.progress.rush;
+      this.progress = { ...this.progress, rush: Math.max(this.progress.rush, this.score) };
       this.persist();
       haptic('success'); sfx('win');
       this.emit();
       await wait(400);
-      this.modal = { type: 'win', bonus, stars, record };
+      this.modal = { type: 'rush', record };
+      this.emit();
+    } else if (this.done()) {
+      this.over = true;
+      const bonus = this.moves * 50;
+      this.score += bonus;
+      const stars = this.stars();
+      let record = false, gained = 0, streak = 0;
+      this.stat({ served: this.progress.stats.served + 1 });
+      if (this.mode === 'daily') {
+        const before = this.progress;
+        this.progress = recordDaily(before, this.day);
+        if (this.progress !== before) gained = DAILY_COINS;
+        streak = dailyStreak(this.progress, this.day);
+      } else {
+        const res = recordWin(this.progress, this.lvlIdx, stars, this.score);
+        this.progress = res.progress; record = res.record; gained = res.gained;
+      }
+      this.persist();
+      haptic('success'); sfx('win');
+      this.emit();
+      await wait(400);
+      this.modal = { type: 'win', bonus, stars, record, gained, streak };
       this.emit();
     } else if (this.moves <= 0) {
       this.over = true;
@@ -443,6 +587,7 @@ export class Game {
   }
 
   shareText() {
+    if (this.mode === 'rush') return `🍕 Pizzaiolo Crush — Ora di punta: ${this.score} punti in ${RUSH_SECONDS} secondi!`;
     return `🍕 Pizzaiolo Crush — ${this.lvl.pizza} servita in ${this.startMoves - this.moves} mosse ${'⭐'.repeat(this.stars())} (${this.score} pt)`;
   }
 }

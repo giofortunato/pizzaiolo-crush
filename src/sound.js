@@ -1,7 +1,8 @@
+import { AppState } from 'react-native';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Effetti sonori. I file .wav si rigenerano con: python3 scripts/make-sounds.py
+// Effetti sonori e musica. I file .wav si rigenerano con scripts/make-sounds.py e scripts/make-music.py
 const SOURCES = {
   swap: require('../assets/sounds/swap.wav'),
   bad: require('../assets/sounds/bad.wav'),
@@ -16,9 +17,14 @@ const SOURCES = {
   lose: require('../assets/sounds/lose.wav'),
 };
 
+const MUSIC = require('../assets/sounds/music.wav');
+
 const MUTE_KEY = 'pizzaiolo-crush/muted/v1';
+const MUSIC_KEY = 'pizzaiolo-crush/music/v1';
 const players = {};
+let music = null;
 let muted = false;
+let musicOn = true;
 let ready = false;
 
 // Da chiamare una volta all'avvio. Rispetta il tasto silenzioso dell'iPhone
@@ -26,6 +32,7 @@ let ready = false;
 export async function initSound() {
   try {
     muted = (await AsyncStorage.getItem(MUTE_KEY)) === '1';
+    musicOn = (await AsyncStorage.getItem(MUSIC_KEY)) !== '0';
   } catch {}
   try {
     await setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' });
@@ -34,7 +41,31 @@ export async function initSound() {
     for (const k in SOURCES) players[k] = createAudioPlayer(SOURCES[k]);
     ready = true;
   } catch {}
-  return muted;
+  try {
+    music = createAudioPlayer(MUSIC);
+    music.loop = true;
+    music.volume = 0.22; // sottofondo: gli effetti devono restare in primo piano
+    // La musica si ferma quando l'app va in secondo piano e riparte al ritorno.
+    AppState.addEventListener('change', syncMusic);
+  } catch {}
+  syncMusic();
+  return { muted, music: musicOn };
+}
+
+// Fa suonare o tacere la musica secondo interruttori e stato dell'app.
+// Sul web il browser la fa partire solo dopo il primo tocco: per questo si richiama anche da lì.
+export function syncMusic() {
+  if (!music) return;
+  try {
+    if (musicOn && !muted && AppState.currentState === 'active') music.play();
+    else music.pause();
+  } catch {}
+}
+
+export function setMusic(value) {
+  musicOn = value;
+  AsyncStorage.setItem(MUSIC_KEY, value ? '1' : '0').catch(() => {});
+  syncMusic();
 }
 
 export function sfx(name) {
@@ -52,4 +83,5 @@ export function isMuted() { return muted; }
 export function setMuted(value) {
   muted = value;
   AsyncStorage.setItem(MUTE_KEY, value ? '1' : '0').catch(() => {});
+  syncMusic();
 }

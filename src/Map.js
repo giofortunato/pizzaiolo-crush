@@ -35,7 +35,7 @@ export default function LevelMap({ game, onPick, settings, cols = 3 }) {
   return (
     <View style={styles.wrap}>
       <View style={styles.header}>
-        <Text style={styles.h1}>Pizzaiolo Crush</Text>
+        <Text style={styles.h1}>Pizzaiolo Pazzo</Text>
         <View style={styles.totals}>
           <Text style={styles.total}>⭐ {totalStars(p)}<Text style={styles.totalOf}> / {count * 3}</Text></Text>
           <Text style={styles.total}>{totalScore(p)}<Text style={styles.totalOf}> punti</Text></Text>

@@ -22,7 +22,7 @@ const MUTE_KEY = 'pizzaiolo-crush/muted/v1';
 const MUSIC_KEY = 'pizzaiolo-crush/music/v1';
 const players = {};
 let muted = false;
-let musicOn = false; // spenta finché il giocatore non la accende dalla mappa
+let musicOn = true; // accesa finché il giocatore non la spegne dalla mappa
 let ready = false;
 
 // Da chiamare una volta all'avvio. Rispetta il tasto silenzioso dell'iPhone
@@ -30,7 +30,7 @@ let ready = false;
 export async function initSound() {
   try {
     muted = (await AsyncStorage.getItem(MUTE_KEY)) === '1';
-    musicOn = (await AsyncStorage.getItem(MUSIC_KEY)) === '1';
+    musicOn = (await AsyncStorage.getItem(MUSIC_KEY)) !== '0';
   } catch {}
   try {
     await setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' });

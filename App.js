@@ -166,7 +166,7 @@ function Root() {
   const [ready, setReady] = useState(false);
   const [screen, setScreen] = useState('map');
   const [muted, setMutedState] = useState(false);
-  const [music, setMusicState] = useState(false);
+  const [music, setMusicState] = useState(true);
   const [haptics, setHapticsState] = useState(true);
   const [fontsLoaded, fontError] = useFonts({ LilitaOne_400Regular, Nunito_600SemiBold, Nunito_600SemiBold_Italic, Nunito_800ExtraBold });
   const layout = useLayout();

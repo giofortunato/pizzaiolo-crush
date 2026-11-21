@@ -37,8 +37,8 @@ Poi apri **Expo Go** con lo stesso account: il progetto compare nell'elenco, con
 
 ## Musica
 
-La musica parte quando inforni e si ferma a pizza finita; sulla mappa non suona. È spenta finché
-non la accendi con 🎵. Ogni pizza ha un "umore" (`mood` in `src/data.js`): napoletana, piccante,
+La musica parte quando inforni e si ferma a pizza finita; sulla mappa non suona. È accesa di
+serie e si spegne con 🎵. Ogni pizza ha un "umore" (`mood` in `src/data.js`): napoletana, piccante,
 americana, lenta, mare. In `src/music.js` si collega un brano a ogni umore; quelli senza brano
 usano `napoletana`.
 

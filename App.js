@@ -14,7 +14,7 @@ import Pizza from './src/Pizza';
 import LevelMap from './src/Map';
 import Title, { Loading } from './src/Title';
 import { loadProgress, saveProgress } from './src/save';
-import { initSound, setMuted, setMusic } from './src/sound';
+import { initSound, setMuted, setMusic, playMusic } from './src/sound';
 import { initHaptics, setHaptics } from './src/haptic';
 import { motion } from './src/motion';
 import { useLayout } from './src/layout';
@@ -188,6 +188,11 @@ function Root() {
     });
     return () => { alive = false; if (sub && sub.remove) sub.remove(); };
   }, [game]);
+
+  // Musica del menu su schermata iniziale e mappa; in partita la sceglie l'ordine (al momento di infornare).
+  useEffect(() => {
+    if (ready && screen !== 'game') playMusic('menu');
+  }, [ready, screen]);
 
   // Se i font non arrivano (es. senza rete sul web) si parte lo stesso con quelli di sistema.
   if (!ready || (!fontsLoaded && !fontError)) return <View style={styles.root}><Loading /></View>;

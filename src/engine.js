@@ -86,6 +86,31 @@ export class Game {
     this.emit();
   }
 
+  // ---------- pausa ----------
+  // Si mette in pausa solo una partita viva e senza finestre aperte. In pausa tacciono musica,
+  // suggerimenti e cronometro dell'ora di punta; le mosse restano come sono.
+  canPause() { return !!this.lvl && !this.over && !this.modal; }
+
+  pause() {
+    if (!this.canPause()) return;
+    this.clearHint();
+    this.stopClock();
+    stopMusic();
+    this.sel = null;
+    this.tool = null;
+    this.modal = { type: 'pause' };
+    this.emit();
+  }
+
+  unpause() {
+    if (!this.modal || this.modal.type !== 'pause') return;
+    this.modal = null;
+    playMusic(this.lvl.mood);
+    if (this.mode === 'rush' && this.timeLeft > 0) this.startClock();
+    this.emit();
+    this.armHint();
+  }
+
   // Cancella tutto: progressi, stelle e partita in corso.
   reset() {
     this.clearHint();

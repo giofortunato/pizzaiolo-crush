@@ -48,7 +48,7 @@ export const LEVELS = [
     win: 'Brucia! Perfetta! 🔥', lose: 'Troppo lenta, fratello.',
   },
   {
-    pizza: 'Hawaiana', mood: 'americana', face: '🤠', who: 'Kevin (Ohio)', types: [0, 1, 2, 3, 4, 6],
+    pizza: 'Hawaiana', mood: 'hawaiana', face: '🤠', who: 'Kevin (Ohio)', types: [0, 1, 2, 3, 4, 6],
     need: { 0: 12, 1: 12, 6: 15 }, moves: 25, nonno: true,
     hi: 'Pineapple pizza, please! Lots of it!',
     win: 'Best pizza in Italy, dude!', lose: "Okay… I'll just grab a burger.",

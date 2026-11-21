@@ -594,7 +594,7 @@ export class Game {
   }
 
   shareText() {
-    if (this.mode === 'rush') return `🍕 Pizzaiolo Crush — Ora di punta: ${this.score} punti in ${RUSH_SECONDS} secondi!`;
-    return `🍕 Pizzaiolo Crush — ${this.lvl.pizza} servita in ${this.startMoves - this.moves} mosse ${'⭐'.repeat(this.stars())} (${this.score} pt)`;
+    if (this.mode === 'rush') return `🍕 Pizzaiolo Pazzo — Ora di punta: ${this.score} punti in ${RUSH_SECONDS} secondi!`;
+    return `🍕 Pizzaiolo Pazzo — ${this.lvl.pizza} servita in ${this.startMoves - this.moves} mosse ${'⭐'.repeat(this.stars())} (${this.score} pt)`;
   }
 }

@@ -3,6 +3,7 @@ import { sanitize } from './progress';
 
 // Salvataggio: ordini sbloccati, stelle, record e la partita in corso (griglia compresa),
 // così chiudendo l'app a metà ordine si riparte dalla stessa mossa.
+// Le chiavi usano ancora il vecchio nome del gioco (Pizzaiolo Crush): cambiarle farebbe perdere i salvataggi.
 const KEY = 'pizzaiolo-crush/progress/v2';
 const OLD_KEY = 'pizzaiolo-crush/progress/v1'; // solo { lvlIdx, score }
 

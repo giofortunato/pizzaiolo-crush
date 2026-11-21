@@ -1,4 +1,4 @@
-# 🍕 Pizzaiolo Crush
+# 🍕 Pizzaiolo Pazzo
 
 Un match-3 in cui gli ingredienti che allinei finiscono sulla pizza del cliente.
 È fatto con Expo SDK 58 (React Native 0.88).
@@ -12,9 +12,22 @@ npx expo start
 
 Poi inquadra il QR code con **Expo Go** (iOS o Android). Puoi anche premere `w` per aprirlo nel browser.
 
+## Versione web
+
+Online su **https://pizzaiolo-pazzo.expo.app** (EAS Hosting). Per aggiornarla:
+
+```bash
+npx expo export --platform web
+npx eas-cli@latest deploy --prod
+```
+
 ## Provarlo sul telefono senza il Mac acceso
 
 Il progetto usa EAS Update (`@giofortunato/pizzaiolo-crush` su expo.dev).
+
+> Il gioco si chiamava **Pizzaiolo Crush**: nome cambiato per evitare confusione con Candy Crush.
+> Restano col vecchio nome lo `slug` in `app.json` (collegato al progetto su expo.dev), il repository
+> e le chiavi di salvataggio (cambiarle farebbe perdere i progressi).
 
 ```bash
 npx eas-cli@latest update --channel preview --environment preview --message "cosa è cambiato"

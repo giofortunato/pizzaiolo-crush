@@ -242,7 +242,7 @@ function GameScreen({ game, onMap, muted, onMute }) {
     <>
       <View ref={layerRef} onLayout={onLayerLayout} style={[styles.app, { width: layout.colW }]}>
         <View style={styles.header}>
-          <Text style={[styles.h1, { flexShrink: 1 }]} numberOfLines={1} adjustsFontSizeToFit>Pizzaiolo Crush</Text>
+          <Text style={[styles.h1, { flexShrink: 1 }]} numberOfLines={1} adjustsFontSizeToFit>Pizzaiolo Pazzo</Text>
           <View style={styles.headerRight}>
             <Pressable onPress={onMap} hitSlop={8} accessibilityRole="button" accessibilityLabel="Mappa degli ordini" style={styles.iconBtn}>
               <Text style={styles.iconBtnT}>🗺️</Text>

@@ -14,12 +14,7 @@ export function setupWeb() {
   `;
   document.head.appendChild(style);
 
-  // Il browser blocca la musica finché non si tocca la pagina: al primo tocco (o tasto) parte.
-  const unlock = () => {
-    unlockAudio();
-    window.removeEventListener('pointerdown', unlock, true);
-    window.removeEventListener('keydown', unlock, true);
-  };
-  window.addEventListener('pointerdown', unlock, true);
-  window.addEventListener('keydown', unlock, true);
+  // Il browser blocca l'audio finché non si tocca la pagina. Su iPhone vale solo il momento in cui si
+  // solleva il dito (touchend), non quando lo si appoggia: per questo si ascoltano touchend, click e tasti.
+  for (const ev of ['touchend', 'click', 'keydown']) window.addEventListener(ev, () => unlockAudio(), true);
 }

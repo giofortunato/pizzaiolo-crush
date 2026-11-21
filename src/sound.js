@@ -95,8 +95,21 @@ const wanted = () => !!srcFor(mood) && musicOn && !muted && AppState.currentStat
 export function playMusic(which) { mood = which || DEFAULT_TRACK; syncMusic(); }
 export function stopMusic() { mood = null; syncMusic(); }
 
-// Sul web il browser fa partire l'audio solo dopo un tocco: al primo tocco si riprova.
-export function unlockAudio() { syncMusic(); }
+// Sul web il browser fa partire l'audio solo durante un gesto dell'utente (su iPhone: quando si solleva il dito),
+// e Safari lo chiede per ogni singolo file. Si chiama a ogni tocco (vedi web.js):
+// - la prima volta fa suonare per un attimo, in silenzio, tutti gli altri lettori, così poi partono anche da soli;
+// - se la musica che dovrebbe suonare è ferma perché il browser l'aveva rifiutata, la riavvia.
+let unlocked = false;
+export function unlockAudio() {
+  if (wanted() && (!current || !current.playing)) syncMusic();
+  if (unlocked) return;
+  unlocked = true;
+  const others = [...Object.values(players), ...tracks.values()].filter((p) => p !== current);
+  for (const p of others) { try { p.muted = true; p.play(); } catch {} }
+  setTimeout(() => {
+    for (const p of others) { try { if (p !== current) p.pause(); p.muted = false; } catch {} }
+  }, 80);
+}
 
 function silence(p) { ramp(p, 0, () => { if (p !== current || !wanted()) try { p.pause(); } catch {} }); }
 

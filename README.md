@@ -12,6 +12,15 @@ npx expo start
 
 Poi inquadra il QR code con **Expo Go** (iOS o Android). Puoi anche premere `w` per aprirlo nel browser.
 
+## Versione web
+
+Online su **https://pizzaiolo-pazzo.expo.app** (EAS Hosting). Per aggiornarla:
+
+```bash
+npx expo export --platform web
+npx eas-cli@latest deploy --prod
+```
+
 ## Provarlo sul telefono senza il Mac acceso
 
 Il progetto usa EAS Update (`@giofortunato/pizzaiolo-crush` su expo.dev).

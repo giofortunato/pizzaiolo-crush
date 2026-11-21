@@ -37,8 +37,9 @@ Poi apri **Expo Go** con lo stesso account: il progetto compare nell'elenco, con
 
 ## Musica
 
-La musica parte quando inforni e si ferma a pizza finita; sulla mappa non suona. È spenta finché
-non la accendi con 🎵. Ogni pizza ha un "umore" (`mood` in `src/data.js`): napoletana, piccante,
+Sulla schermata iniziale e sulla mappa suona la musica del menu; in partita parte quella della pizza
+quando inforni e si ferma a pizza finita. È accesa di
+serie e si spegne con 🎵. Ogni pizza ha un "umore" (`mood` in `src/data.js`): napoletana, piccante,
 americana, lenta, mare. In `src/music.js` si collega un brano a ogni umore; quelli senza brano
 usano `napoletana`.
 
@@ -47,9 +48,10 @@ Due brani sono di **Sascha Ende** ([ende.app](https://ende.app)), licenza
 l'autore (fatto qui e in fondo alla mappa). Per le condizioni del sito: non dichiararli propri, non
 registrarli in sistemi di riconoscimento audio (Content ID).
 
-Tre brani vengono da **Pixabay**, con la [Pixabay Content License](https://pixabay.com/service/license-summary/):
+Quattro brani vengono da **Pixabay**, con la [Pixabay Content License](https://pixabay.com/service/license-summary/):
 uso gratuito anche commerciale, attribuzione non obbligatoria (la diamo comunque); non si possono
-ridistribuire da soli, fuori dal gioco. Sono stati scelti brani **senza Content ID**.
+ridistribuire da soli, fuori dal gioco. Tutti tranne quello del menu sono **senza Content ID**: con quello,
+chi pubblica un video del gioco su YouTube può ricevere un avviso, che si risolve mostrando la licenza.
 
 | Umore | Brano | Fonte | File |
 |---|---|---|---|
@@ -58,6 +60,7 @@ ridistribuire da soli, fuori dal gioco. Sono stati scelti brani **senza Content 
 | americana | [Italian Tarantella](https://pixabay.com/music/world-italian-tarantella-571958/) | Art_Roseman, Pixabay | `americana.m4a` |
 | lenta | [Notte Stellata - Italian Accordion Music](https://pixabay.com/music/folk-notte-stellata-italian-accordion-music-345499/) | BFCMUSIC, Pixabay | `lenta.m4a` |
 | mare | [Atlas • Italy](https://pixabay.com/music/orchestral-atlas-italy-555394/) | Vadim_Makes_Sound, Pixabay | `mare.m4a` |
+| menu (schermata iniziale e mappa) | [Italian Pizza](https://pixabay.com/music/cartoons-italian-pizza-562041/) | Art_Roseman, Pixabay (con Content ID) | `menu.m4a` |
 
 I file sono in `assets/sounds/music/`, compressi con `afconvert -f m4af -d aac -b 96000 brano.mp3 assets/sounds/music/<umore>.m4a`
 

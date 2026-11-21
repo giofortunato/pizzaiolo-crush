@@ -22,7 +22,7 @@ const MUTE_KEY = 'pizzaiolo-crush/muted/v1';
 const MUSIC_KEY = 'pizzaiolo-crush/music/v1';
 const players = {};
 let muted = false;
-let musicOn = false; // spenta finché il giocatore non la accende dalla mappa
+let musicOn = true; // accesa finché il giocatore non la spegne dalla mappa
 let ready = false;
 
 // Da chiamare una volta all'avvio. Rispetta il tasto silenzioso dell'iPhone
@@ -30,7 +30,7 @@ let ready = false;
 export async function initSound() {
   try {
     muted = (await AsyncStorage.getItem(MUTE_KEY)) === '1';
-    musicOn = (await AsyncStorage.getItem(MUSIC_KEY)) === '1';
+    musicOn = (await AsyncStorage.getItem(MUSIC_KEY)) !== '0';
   } catch {}
   try {
     await setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' });
@@ -72,9 +72,14 @@ function trackFor(src) {
   p = createAudioPlayer(src);
   p.loop = true;
   p.volume = 0;
-  // Appena il brano è caricato, se è proprio quello che deve suonare, parte.
+  // Appena il brano è caricato (una volta sola), se è proprio quello che deve suonare, parte.
+  // Solo al primo caricamento: sul web un play() rifiutato dal browser manda un altro aggiornamento,
+  // e riprovare a ogni aggiornamento farebbe un giro infinito.
+  let loaded = false;
   p.addListener('playbackStatusUpdate', (st) => {
-    if (st.isLoaded && current === p && wanted() && !p.playing) { try { p.play(); } catch {} }
+    if (!st.isLoaded || loaded) return;
+    loaded = true;
+    if (current === p && wanted() && !p.playing) { try { p.play(); } catch {} }
   });
   tracks.set(src, p);
   return p;
@@ -89,6 +94,22 @@ const wanted = () => !!srcFor(mood) && musicOn && !muted && AppState.currentStat
 
 export function playMusic(which) { mood = which || DEFAULT_TRACK; syncMusic(); }
 export function stopMusic() { mood = null; syncMusic(); }
+
+// Sul web il browser fa partire l'audio solo durante un gesto dell'utente (su iPhone: quando si solleva il dito),
+// e Safari lo chiede per ogni singolo file. Si chiama a ogni tocco (vedi web.js):
+// - la prima volta fa suonare per un attimo, in silenzio, tutti gli altri lettori, così poi partono anche da soli;
+// - se la musica che dovrebbe suonare è ferma perché il browser l'aveva rifiutata, la riavvia.
+let unlocked = false;
+export function unlockAudio() {
+  if (wanted() && (!current || !current.playing)) syncMusic();
+  if (unlocked) return;
+  unlocked = true;
+  const others = [...Object.values(players), ...tracks.values()].filter((p) => p !== current);
+  for (const p of others) { try { p.muted = true; p.play(); } catch {} }
+  setTimeout(() => {
+    for (const p of others) { try { if (p !== current) p.pause(); p.muted = false; } catch {} }
+  }, 80);
+}
 
 function silence(p) { ramp(p, 0, () => { if (p !== current || !wanted()) try { p.pause(); } catch {} }); }
 

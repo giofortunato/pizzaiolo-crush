@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
-import { View, Text, Pressable, Share, StyleSheet, Animated, Easing, AccessibilityInfo } from 'react-native';
+import { View, Text, Pressable, Share, StyleSheet, Animated, Easing, AccessibilityInfo, AppState } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
@@ -12,8 +12,9 @@ import { C, F } from './src/theme';
 import Board, { INSET_X, INSET_Y, cellFor } from './src/Board';
 import Pizza from './src/Pizza';
 import LevelMap from './src/Map';
+import Title, { Loading } from './src/Title';
 import { loadProgress, saveProgress } from './src/save';
-import { initSound, setMuted, setMusic } from './src/sound';
+import { initSound, setMuted, setMusic, playMusic } from './src/sound';
 import { initHaptics, setHaptics } from './src/haptic';
 import { motion } from './src/motion';
 import { useLayout } from './src/layout';
@@ -159,20 +160,20 @@ function Pop({ delay = 0, style, children }) {
   return <Animated.View style={[style, { opacity: v, transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }] }]}>{children}</Animated.View>;
 }
 
-// Carica salvataggio e caratteri, poi mostra la mappa degli ordini oppure la partita.
+// Carica salvataggio e caratteri, poi mostra la schermata iniziale, la mappa degli ordini o la partita.
 function Root() {
   const [, rerender] = useReducer((x) => x + 1, 0);
   const [game] = useState(() => new Game(() => rerender(), saveProgress));
   const [ready, setReady] = useState(false);
-  const [screen, setScreen] = useState('map');
+  const [screen, setScreen] = useState('title');
   const [muted, setMutedState] = useState(false);
-  const [music, setMusicState] = useState(false);
+  const [music, setMusicState] = useState(true);
   const [haptics, setHapticsState] = useState(true);
   const [fontsLoaded, fontError] = useFonts({ LilitaOne_400Regular, Nunito_600SemiBold, Nunito_600SemiBold_Italic, Nunito_800ExtraBold });
   const layout = useLayout();
   const { width, height } = layout;
 
-  // All'avvio: se c'era un ordine lasciato a metà si riparte da lì, altrimenti dalla mappa.
+  // All'avvio si carica il salvataggio; un ordine lasciato a metà si riprende dalla schermata iniziale.
   useEffect(() => {
     let alive = true;
     initSound().then((snd) => { if (alive) { setMutedState(snd.muted); setMusicState(snd.music); } });
@@ -182,14 +183,19 @@ function Root() {
     const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', (on) => { motion.reduce = !!on; });
     loadProgress().then((saved) => {
       if (!alive) return;
-      if (game.load(saved)) setScreen('game');
+      game.load(saved);
       setReady(true);
     });
     return () => { alive = false; if (sub && sub.remove) sub.remove(); };
   }, [game]);
 
+  // Musica del menu su schermata iniziale e mappa; in partita la sceglie l'ordine (al momento di infornare).
+  useEffect(() => {
+    if (ready && screen !== 'game') playMusic('menu');
+  }, [ready, screen]);
+
   // Se i font non arrivano (es. senza rete sul web) si parte lo stesso con quelli di sistema.
-  if (!ready || (!fontsLoaded && !fontError)) return <View style={styles.root} />;
+  if (!ready || (!fontsLoaded && !fontError)) return <View style={styles.root}><Loading /></View>;
 
   const settings = {
     muted, music, haptics,
@@ -212,7 +218,15 @@ function Root() {
   return (
     <SafeAreaView style={styles.root}>
       <OvenGlow width={width} height={height} />
-      {playing ? (
+      {screen === 'title' ? (
+        <View style={{ flex: 1, width: layout.colW }}>
+          <Title
+            layout={layout} game={game}
+            onPlay={() => setScreen(game.inProgress('level') || game.inProgress('daily') ? 'game' : 'map')}
+            onMap={() => setScreen('map')}
+          />
+        </View>
+      ) : playing ? (
         <GameScreen game={game} onMap={toMap} muted={muted} onMute={settings.toggleMute} />
       ) : (
         <View style={{ flex: 1, width: layout.colW }}><LevelMap game={game} onPick={pick} settings={settings} cols={layout.mapCols} /></View>
@@ -238,12 +252,25 @@ function GameScreen({ game, onMap, muted, onMute }) {
   const rush = game.mode === 'rush';
   const coins = game.progress.coins;
 
+  // Se esci dall'app o cambi scheda del browser, il gioco va in pausa da solo.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => { if (st !== 'active') game.pause(); });
+    return () => sub.remove();
+  }, [game]);
+
   return (
     <>
       <View ref={layerRef} onLayout={onLayerLayout} style={[styles.app, { width: layout.colW }]}>
         <View style={styles.header}>
           <Text style={[styles.h1, { flexShrink: 1 }]} numberOfLines={1} adjustsFontSizeToFit>Pizzaiolo Pazzo</Text>
           <View style={styles.headerRight}>
+            <Pressable
+              onPress={() => game.pause()} disabled={!game.canPause()} hitSlop={8}
+              accessibilityRole="button" accessibilityLabel="Pausa"
+              style={[styles.iconBtn, !game.canPause() && { opacity: 0.4 }]}
+            >
+              <Text style={styles.iconBtnT}>⏸️</Text>
+            </Pressable>
             <Pressable onPress={onMap} hitSlop={8} accessibilityRole="button" accessibilityLabel="Mappa degli ordini" style={styles.iconBtn}>
               <Text style={styles.iconBtnT}>🗺️</Text>
             </Pressable>
@@ -337,6 +364,7 @@ function GameModal({ game, onMap }) {
   const layout = useLayout();
   const { lvl, modal } = game;
   const [shared, setShared] = useState(false);
+  const [sure, setSure] = useState(false);
   let body;
   const toMap = (
     <Pressable onPress={onMap} style={styles.reset} hitSlop={8} accessibilityRole="button">
@@ -404,6 +432,26 @@ function GameModal({ game, onMap }) {
           </View>
         ) : null}
         <View style={styles.btns}><Btn label="Inforna!" onPress={() => game.begin()} /></View>
+        {toMap}
+      </>
+    );
+  } else if (modal.type === 'pause') {
+    body = (
+      <>
+        <Text style={styles.big}>⏸️</Text>
+        <Text style={styles.h2}>Pausa</Text>
+        <Text style={styles.p}>
+          {game.mode === 'rush'
+            ? <>Restano <Text style={styles.strong}>{game.timeLeft} secondi</Text>, {game.score} punti.</>
+            : <>{lvl.who} aspetta la sua {lvl.pizza}: ti restano <Text style={styles.strong}>{game.moves} mosse</Text>.</>}
+        </Text>
+        <View style={styles.btns}><Btn label="Continua" onPress={() => game.unpause()} /></View>
+        <Pressable
+          onPress={() => { if (sure) game.retry(); else setSure(true); }}
+          style={styles.reset} hitSlop={8} accessibilityRole="button"
+        >
+          <Text style={[styles.resetT, sure && styles.resetHot]}>{sure ? 'Sicuro? Tocca ancora per ricominciare' : 'Ricomincia da capo'}</Text>
+        </Pressable>
         {toMap}
       </>
     );
@@ -562,5 +610,6 @@ const styles = StyleSheet.create({
   btnPressed: { transform: [{ translateY: 3 }], borderBottomWidth: 1 },
   btnT: { color: '#fff', fontFamily: F.display, fontSize: 18, letterSpacing: 0.3 },
   reset: { alignSelf: 'center', marginTop: 12, padding: 4 },
+  resetHot: { color: C.tomato, opacity: 1, fontFamily: F.bodyBold },
   resetT: { color: C.wood, fontFamily: F.body, opacity: 0.6, fontSize: 13, textDecorationLine: 'underline' },
 });

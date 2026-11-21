@@ -131,7 +131,7 @@ export default function Board({ game, width }) {
   const sel = game.sel && game.grid[game.sel.r] && game.grid[game.sel.r][game.sel.c];
   return (
     <View style={[styles.frame, { width, height: width + EDGE_TOP + EDGE_BOTTOM }]}>
-    <View style={[styles.inner, { width: inner, height: inner }]} {...pan.panHandlers}>
+    <View style={[styles.inner, { width: inner, height: inner, touchAction: 'none' }]} {...pan.panHandlers}>
       {[...game.tiles.values()].map((t) => (
         <Tile key={t.id} tile={t} t={t.t} sp={t.sp} hp={t.hp} lock={t.lock} cell={cell} selected={sel === t} />
       ))}

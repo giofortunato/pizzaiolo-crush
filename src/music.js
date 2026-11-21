@@ -9,7 +9,8 @@ export const TRACKS = {
   piccante: require('../assets/sounds/music/piccante.m4a'),     // Italy - Kitchen Tarantella (Sascha Ende)
   americana: require('../assets/sounds/music/americana.m4a'),   // Italian Tarantella, Art_Roseman (Pixabay)
   lenta: require('../assets/sounds/music/lenta.m4a'),           // Notte Stellata - Italian Accordion Music, BFCMUSIC (Pixabay)
-  mare: require('../assets/sounds/music/mare.m4a'),             // Atlas • Italy, Vadim_Makes_Sound (Pixabay)
+  mare: require('../assets/sounds/music/mare.m4a'),
+  menu: require('../assets/sounds/music/menu.m4a'),             // Italian Pizza, Art_Roseman (Pixabay): schermata iniziale e mappa             // Atlas • Italy, Vadim_Makes_Sound (Pixabay)
 };
 export const DEFAULT_TRACK = 'napoletana';
 // Volume della musica rispetto agli effetti (0-1). I brani sono già masterizzati: 0.35 li tiene sotto ai pop.

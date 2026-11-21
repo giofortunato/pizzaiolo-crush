@@ -7,6 +7,7 @@
 export const TRACKS = {
   napoletana: require('../assets/sounds/music/napoletana.m4a'), // Italy - Espresso in the Piazza (Sascha Ende)
   piccante: require('../assets/sounds/music/piccante.m4a'),     // Italy - Kitchen Tarantella (Sascha Ende)
+  hawaiana: require('../assets/sounds/music/hawaiana.m4a'),     // Atlas • Hawaii, Vadim_Makes_Sound (Pixabay): solo la Hawaiana
   americana: require('../assets/sounds/music/americana.m4a'),   // Italian Tarantella, Art_Roseman (Pixabay)
   lenta: require('../assets/sounds/music/lenta.m4a'),           // Notte Stellata - Italian Accordion Music, BFCMUSIC (Pixabay)
   mare: require('../assets/sounds/music/mare.m4a'),
